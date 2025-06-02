@@ -48,13 +48,11 @@ impl<'d> Channel<'d> {
 }
 impl Channel<'_> {
     pub async fn commutate(&mut self) {
-        // Turn off low side
         self.low.set_low();
 
-        // Dead time: wait ~500ns (can adjust)
+        // Dead time
         Timer::after_micros(1).await;
 
-        // Turn on high side with set duty
         self.high
             .set_duty_cycle_fraction(self.duty_cycle, u16::MAX)
             .unwrap();
@@ -63,13 +61,11 @@ impl Channel<'_> {
     }
 
     pub async fn decommutate(&mut self) {
-        // Turn off high side
         self.high.set_duty_cycle_fully_off().unwrap();
 
         // Dead time
         Timer::after_micros(1).await;
 
-        // Enable low side
         self.low.set_high();
 
         self.is_high = false;

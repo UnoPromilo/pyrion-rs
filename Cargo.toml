@@ -1,5 +1,5 @@
 [workspace]
-members = [ "as5600",
+members = [ "as5600", "command_parser",
     "firmware"
 , "hardware_abstraction"]
 resolver = "3"
