@@ -47,9 +47,15 @@ async fn main(spawner: Spawner) {
         //watchdog.feed();
         motor_driver.set_step(CommutationStep::AB).await;
         Timer::after(Duration::from_millis(50)).await;
+        motor_driver.set_step(CommutationStep::AC).await;
+        Timer::after(Duration::from_millis(50)).await;
         motor_driver.set_step(CommutationStep::BC).await;
         Timer::after(Duration::from_millis(50)).await;
+        motor_driver.set_step(CommutationStep::BA).await;
+        Timer::after(Duration::from_millis(50)).await;
         motor_driver.set_step(CommutationStep::CA).await;
+        Timer::after(Duration::from_millis(50)).await;
+        motor_driver.set_step(CommutationStep::CB).await;
         Timer::after(Duration::from_millis(50)).await;
     }
 }
