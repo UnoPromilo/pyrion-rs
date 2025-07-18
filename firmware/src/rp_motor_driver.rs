@@ -1,144 +1,88 @@
-use embassy_rp::Peripheral;
-use embassy_rp::gpio::{Level, Output, Pin};
-use embassy_rp::pwm::{ChannelAPin, Config, Pwm, PwmBatch, Slice};
-use embassy_time::Timer;
+use embassy_rp::pwm;
+use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embedded_hal::pwm::SetDutyCycle;
+use hardware_abstraction::helpers;
 use hardware_abstraction::motor_driver;
-use hardware_abstraction::motor_driver::CommutationStep;
+
+const CLOCK_FREQUENCY: u32 = 125_000_000;
+const DESIRED_FREQ: u32 = 20_000;
+const PWM_PERIOD: u16 = (CLOCK_FREQUENCY / DESIRED_FREQ / 2) as u16;
+const HALF_DEAD_TIME: u16 = 31; //*2 =  496ns, should be enough
 
 pub struct MotorDriver<'d> {
-    a: Channel<'d>,
-    b: Channel<'d>,
-    c: Channel<'d>,
-
-    current_step: Option<CommutationStep>,
+    a: Pwm<'d>,
+    b: Pwm<'d>,
+    c: Pwm<'d>,
 }
+pub fn new_pwm_synced<'a, T: Slice>(
+    slice: T,
+    high_pin: impl ChannelAPin<T> + 'a,
+    low_pin: impl ChannelBPin<T> + 'a,
+) -> Pwm<'a> {
+    let mut config = Config::default();
+    config.invert_a = false;
+    config.invert_b = true;
+    config.phase_correct = true;
+    config.enable = false;
+    config.compare_a = 0;
+    config.compare_b = 0;
+    config.top = PWM_PERIOD;
 
-pub struct Channel<'d> {
-    high: Pwm<'d>,
-    low: Output<'d>,
-    duty_cycle: u16,
-    is_high: bool,
-}
-
-impl<'d> Channel<'d> {
-    pub fn new_synced<T: Slice>(
-        slice: T,
-        high_pin: impl ChannelAPin<T>,
-        low_pin: impl Peripheral<P = impl Pin> + 'd,
-    ) -> Self {
-        let mut config = Config::default();
-        config.enable = false;
-        let mut high = Pwm::new_output_a(slice, high_pin, config);
-        // Safe because 0 is always less than max duty
-        high.set_duty_cycle_fully_off().unwrap();
-        let low = Output::new(low_pin, Level::Low);
-        high.set_counter(0);
-        Channel {
-            high,
-            low,
-            duty_cycle: 0,
-            is_high: false,
-        }
-    }
-
-    pub fn register_in_batch(&self, batch: &mut PwmBatch) {
-        batch.enable(&self.high);
-    }
-}
-impl Channel<'_> {
-    pub async fn commutate(&mut self) {
-        self.low.set_low();
-
-        // Dead time
-        Timer::after_micros(1).await;
-
-        self.high
-            .set_duty_cycle_fraction(self.duty_cycle, u16::MAX)
-            .unwrap();
-
-        self.is_high = true;
-    }
-
-    pub async fn decommutate(&mut self) {
-        self.high.set_duty_cycle_fully_off().unwrap();
-
-        // Dead time
-        Timer::after_micros(1).await;
-
-        self.low.set_high();
-
-        self.is_high = false;
-    }
-
-    fn disable(&mut self) {
-        self.high.set_duty_cycle_fully_off().unwrap();
-        self.low.set_low();
-        self.is_high = false;
-    }
-
-    fn set_duty_cycle(&mut self, duty_cycle: u16) {
-        self.duty_cycle = duty_cycle;
-        if self.is_high {
-            self.high
-                .set_duty_cycle_fraction(self.duty_cycle, u16::MAX)
-                .unwrap();
-        }
-    }
+    let mut pwm = Pwm::new_output_ab(slice, high_pin, low_pin, config);
+    // Safe because 0 is always less than max duty
+    pwm.set_duty_cycle_fully_off().unwrap();
+    pwm.set_counter(0);
+    pwm
 }
 
 impl<'d> MotorDriver<'d> {
-    pub fn new(a: Channel<'d>, b: Channel<'d>, c: Channel<'d>) -> Self {
-        Self {
-            a,
-            b,
-            c,
-            current_step: None,
-        }
-    }
-
-    async fn set_commutation(high: &mut Channel<'d>, low: &mut Channel<'d>, off: &mut Channel<'d>) {
-        off.disable();
-        low.decommutate().await;
-        high.commutate().await;
+    pub fn new(a: Pwm<'d>, b: Pwm<'d>, c: Pwm<'d>) -> Self {
+        Self { a, b, c }
     }
 }
 
 impl motor_driver::MotorDriver for MotorDriver<'_> {
-    async fn set_step(&mut self, value: CommutationStep) {
-        use CommutationStep::*;
-
-        match value {
-            AB => Self::set_commutation(&mut self.a, &mut self.b, &mut self.c),
-            AC => Self::set_commutation(&mut self.a, &mut self.c, &mut self.b),
-            BA => Self::set_commutation(&mut self.b, &mut self.a, &mut self.c),
-            BC => Self::set_commutation(&mut self.b, &mut self.c, &mut self.a),
-            CA => Self::set_commutation(&mut self.c, &mut self.a, &mut self.b),
-            CB => Self::set_commutation(&mut self.c, &mut self.b, &mut self.a),
-        }
-        .await;
-
-        self.current_step = Some(value);
+    fn init(&mut self) {
+        self.disable()
     }
 
-    fn get_step(&self) -> Option<CommutationStep> {
-        self.current_step
+    fn enable(&mut self) {
+        self.set_pwm_values(0, 0, 0);
+        self.set_pwm_enabled(true);
     }
 
     fn disable(&mut self) {
-        self.a.disable();
-        self.b.disable();
-        self.c.disable();
-        self.current_step = None;
+        self.set_pwm_enabled(false);
+        self.set_pwm_values(0, 0, 0);
     }
 
-    fn set_duty_cycle(&mut self, duty_cycle: u16) {
-        self.a.set_duty_cycle(duty_cycle);
-        self.b.set_duty_cycle(duty_cycle);
-        self.c.set_duty_cycle(duty_cycle);
+    fn set_pwm_values(&mut self, a: u16, b: u16, c: u16) {
+        Self::set_duty_cycle(&mut self.a, a);
+        Self::set_duty_cycle(&mut self.b, b);
+        Self::set_duty_cycle(&mut self.c, c);
+    }
+}
+
+impl MotorDriver<'_> {
+    fn set_pwm_enabled(&self, enable: bool) {
+        pwm::PwmBatch::set_enabled(enable, |batch| {
+            batch.enable(&self.a);
+            batch.enable(&self.b);
+            batch.enable(&self.c);
+        });
     }
 
-    fn get_duty_cycle(&self) -> u16 {
-        self.a.duty_cycle
+    fn set_duty_cycle(channel: &mut Pwm, duty_cycle: u16) {
+        let duty_cycle = helpers::map(duty_cycle, u16::MAX, PWM_PERIOD);
+        let (high, low) = channel.split_by_ref();
+        let high_duty_cycle = (duty_cycle - HALF_DEAD_TIME).max(0);
+        let low_duty_cycle = (duty_cycle + HALF_DEAD_TIME).min(PWM_PERIOD);
+
+        high.expect("High channel is mandatory")
+            .set_duty_cycle(high_duty_cycle)
+            .unwrap();
+        low.expect("Low channel is mandatory")
+            .set_duty_cycle(low_duty_cycle)
+            .unwrap();
     }
 }

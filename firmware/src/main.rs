@@ -2,15 +2,15 @@
 #![no_main]
 
 use crate::as5600_angle_sensor::AS5600Sensor;
-use crate::rp_motor_driver::{Channel, MotorDriver};
+use crate::rp_motor_driver::MotorDriver;
 use defmt::{info, warn};
 use embassy_executor::Spawner;
-use embassy_rp::{bind_interrupts, i2c, peripherals, pwm, uart, watchdog};
-use embassy_time::{Delay, Duration, Timer};
+use embassy_rp::{bind_interrupts, i2c, peripherals, uart, watchdog};
+use embassy_time::{Duration};
 use embedded_io_async::Read;
+use hardware_abstraction::motor_driver::MotorDriver as _;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
-use hardware_abstraction::motor_driver::{CommutationStep, MotorDriver as _};
 
 mod as5600_angle_sensor;
 mod command_task;
@@ -42,24 +42,15 @@ async fn main(spawner: Spawner) {
     let (_, rx) = uart.split();
     spawner.must_spawn(reader(rx));
 
-    motor_driver.set_duty_cycle(20000);
+    motor_driver.init();
+    motor_driver.enable();
     loop {
+        // set correct values
         //watchdog.feed();
-        motor_driver.set_step(CommutationStep::AB).await;
-        Timer::after(Duration::from_millis(50)).await;
-        motor_driver.set_step(CommutationStep::AC).await;
-        Timer::after(Duration::from_millis(50)).await;
-        motor_driver.set_step(CommutationStep::BC).await;
-        Timer::after(Duration::from_millis(50)).await;
-        motor_driver.set_step(CommutationStep::BA).await;
-        Timer::after(Duration::from_millis(50)).await;
-        motor_driver.set_step(CommutationStep::CA).await;
-        Timer::after(Duration::from_millis(50)).await;
-        motor_driver.set_step(CommutationStep::CB).await;
-        Timer::after(Duration::from_millis(50)).await;
     }
 }
 
+#[allow(dead_code)]
 fn init_watchdog(w: peripherals::WATCHDOG) -> watchdog::Watchdog {
     let mut watchdog = watchdog::Watchdog::new(w);
     watchdog.start(Duration::from_millis(100));
@@ -78,15 +69,9 @@ fn init_motor_driver(
     pin_c1: peripherals::PIN_8,
     pin_c2: peripherals::PIN_9,
 ) -> MotorDriver<'static> {
-    let channel_a = Channel::new_synced(slice_a, pin_a1, pin_a2);
-    let channel_b = Channel::new_synced(slice_b, pin_b1, pin_b2);
-    let channel_c = Channel::new_synced(slice_c, pin_c1, pin_c2);
-
-    pwm::PwmBatch::set_enabled(true, |batch| {
-        channel_a.register_in_batch(batch);
-        channel_b.register_in_batch(batch);
-        channel_c.register_in_batch(batch);
-    });
+    let channel_a = rp_motor_driver::new_pwm_synced(slice_a, pin_a1, pin_a2);
+    let channel_b = rp_motor_driver::new_pwm_synced(slice_b, pin_b1, pin_b2);
+    let channel_c = rp_motor_driver::new_pwm_synced(slice_c, pin_c1, pin_c2);
 
     MotorDriver::new(channel_a, channel_b, channel_c)
 }
