@@ -23,5 +23,6 @@ portable-atomic = { version = "1.11.0", features = ["critical-section"] }
 
 as5600 = { path = "../as5600" }
 hardware-abstraction = { path = "../hardware_abstraction" }
+bldc_logic = { path = "../bldc_logic" }
 
 
