@@ -42,24 +42,20 @@ impl<'d> MotorDriver<'d> {
 }
 
 impl motor_driver::MotorDriver for MotorDriver<'_> {
-    fn init(&mut self) {
-        self.disable()
-    }
-
     fn enable(&mut self) {
         self.set_pwm_values(0, 0, 0);
         self.set_pwm_enabled(true);
-    }
-
-    fn disable(&mut self) {
-        self.set_pwm_enabled(false);
-        self.set_pwm_values(0, 0, 0);
     }
 
     fn set_pwm_values(&mut self, a: u16, b: u16, c: u16) {
         Self::set_duty_cycle(&mut self.a, a);
         Self::set_duty_cycle(&mut self.b, b);
         Self::set_duty_cycle(&mut self.c, c);
+    }
+
+    fn disable(&mut self) {
+        self.set_pwm_enabled(false);
+        self.set_pwm_values(0, 0, 0);
     }
 }
 

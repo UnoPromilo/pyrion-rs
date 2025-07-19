@@ -11,7 +11,6 @@ where
 {
     angle_sensor: &'a mut TAngleSensor,
     motor_driver: &'a mut TMotorDriver,
-    config: Config,
 }
 
 impl<'a, TAngleSensor, TAngleSensorError, TMotorDriver>
@@ -21,12 +20,25 @@ where
     TMotorDriver: MotorDriver + 'a,
 {
     pub async fn run(&mut self) -> Result<(), Error<TAngleSensorError>> {
+        let result = self.run_until_error().await;
+        self.disable();
+        result
+    }
+
+    async fn run_until_error(&mut self) -> Result<(), Error<TAngleSensorError>> {
+        let config = self.init()?;
+
         loop {
-            self.task().await?;
+            self.on_tick(&config).await?;
         }
     }
 
-    async fn task(&mut self) -> Result<(), Error<TAngleSensorError>> {
+    fn init(&mut self) -> Result<Config, Error<TAngleSensorError>> {
+        self.motor_driver.enable();
+        Ok(Config::default())
+    }
+
+    async fn on_tick(&mut self, config: &Config) -> Result<(), Error<TAngleSensorError>> {
         // take fresh angle reading
         let angle = self
             .angle_sensor
@@ -36,7 +48,7 @@ where
 
         // convert to electrical angle
         let electrical_angle =
-            ElectricalAngle::from_angle(&angle, self.config.angle_offset, self.config.pole_pairs);
+            ElectricalAngle::from_angle(&angle, config.angle_offset, config.pole_pairs);
 
         // TODO replace i_d and i_q with calculated value
         let (alpha, beta) = park_transformation::inverse(i16::MAX, 0, &electrical_angle);
@@ -46,6 +58,10 @@ where
         // TODO drive motor
 
         Ok(())
+    }
+
+    fn disable(&mut self) {
+        self.motor_driver.disable();
     }
 }
 
