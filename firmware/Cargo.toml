@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 embassy-executor = { version = "0.7.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
-embassy-rp = { version = "0.6.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
+embassy-rp = { version = "0.4.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
 embassy-time = { version = "0.4.0", features = ["defmt", "defmt-timestamp-uptime"] }
 embedded-hal-async = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
@@ -23,6 +23,6 @@ portable-atomic = { version = "1.11.0", features = ["critical-section"] }
 
 as5600 = { path = "../as5600" }
 hardware-abstraction = { path = "../hardware_abstraction" }
-bldc_logic = { path = "../bldc_logic" }
+bldc-logic = { path = "../bldc_logic" }
 
 

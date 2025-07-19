@@ -1,4 +1,5 @@
 use embedded_hal_async::i2c;
+use hardware_abstraction::units::Angle;
 
 type Device<I2C> = as5600::AS5600<I2C>;
 
@@ -18,8 +19,8 @@ where
 {
     type Error = as5600::Error;
 
-    async fn read_angle_u16(&mut self) -> Result<u16, Self::Error> {
+    async fn read_angle_u16(&mut self) -> Result<Angle, Self::Error> {
         let value = self.device.read_angle().await?;
-        Ok(value << 4)
+        Ok(Angle(value << 4))
     }
 }

@@ -1,20 +1,19 @@
-use std::f32::consts::PI;
+use core::f32::consts::PI;
+pub use hardware_abstraction::units::Angle;
+use micromath::F32Ext;
 
-pub struct Angle(pub u16);
+pub struct ElectricalAngle(pub u16);
 
-pub struct ElectricalAngle(pub Angle);
-
-impl Angle {
-    pub fn from_degrees(degrees: u16) -> Self {
-        debug_assert!(degrees < 360);
-        Angle(((degrees as u32 * u16::MAX as u32) / 360) as u16)
+impl ElectricalAngle {
+    pub fn from_angle(angle: &Angle, offset: u16, pole_pairs: u8) -> Self {
+        Self(((angle.0.wrapping_sub(offset) as u32 * pole_pairs as u32) % u16::MAX as u32) as u16)
     }
 
     // TODO remove
     pub fn as_rad(&self) -> f32 {
         self.0 as f32 * 2.0 * PI / u16::MAX as f32
     }
-    
+
     pub fn sin_q15(&self) -> i16 {
         // TODO Replace by SIN_TABLE
         let rad = self.as_rad();

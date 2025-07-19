@@ -29,13 +29,13 @@ use crate::motor_controller::units::ElectricalAngle;
 /// ```rust
 /// use bldc_logic::helpers::park_transformation::inverse;
 /// use bldc_logic::motor_controller::units::{Angle, ElectricalAngle};
-/// let angle = ElectricalAngle(Angle::from_degrees(30));
+/// let angle = ElectricalAngle::from_angle(&Angle::from_degrees(30), 0, 1);
 /// let (alpha, beta) = inverse(16384, 0, &angle);
 /// assert!(alpha.abs() > 0);
 /// ```
 pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &ElectricalAngle) -> (i16, i16) {
-    let sin_theta = electrical_angle.0.sin_q15();
-    let cos_theta = electrical_angle.0.cos_q15();
+    let sin_theta = electrical_angle.sin_q15();
+    let cos_theta = electrical_angle.cos_q15();
     let alpha = ((i_d as i32 * cos_theta as i32 - i_q as i32 * sin_theta as i32) >> 15) as i16;
     let beta = ((i_d as i32 * sin_theta as i32 + i_q as i32 * cos_theta as i32) >> 15) as i16;
 
@@ -45,8 +45,9 @@ pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &ElectricalAngle) -> (i16, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::motor_controller::units::Angle;
-    use std::f32::consts::FRAC_1_SQRT_2;
+    use core::f32::consts::FRAC_1_SQRT_2;
+    use hardware_abstraction::units::Angle;
+
     const TOLERANCE: i16 = 3;
 
     #[test]
@@ -64,14 +65,14 @@ mod tests {
         ];
 
         for (deg, expected_alpha, expected_beta) in cases {
-            let angle = ElectricalAngle(Angle::from_degrees(deg));
+            let angle = ElectricalAngle::from_angle(&Angle::from_degrees(deg), 0, 1);
             test_with_values(&angle, expected_alpha, expected_beta);
         }
     }
 
     #[test]
     fn test_zero_input() {
-        let angle = ElectricalAngle(Angle::from_degrees(123));
+        let angle = ElectricalAngle::from_angle(&Angle::from_degrees(123), 0, 1);
         let (alpha, beta) = inverse(0, 0, &angle);
         assert_eq!(alpha, 0);
         assert_eq!(beta, 0);
