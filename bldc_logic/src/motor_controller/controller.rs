@@ -1,24 +1,33 @@
 use crate::helpers::{clarke_transformation, park_transformation};
 use crate::motor_controller::Config;
 use crate::motor_controller::units::ElectricalAngle;
+use defmt::Format;
 use hardware_abstraction::angle_sensor::AngleSensor;
 use hardware_abstraction::motor_driver::MotorDriver;
 
-pub struct MotorController<'a, TAngleSensor, TAngleSensorError, TMotorDriver>
+pub struct MotorController<TAngleSensor, TAngleSensorError, TMotorDriver>
 where
-    TAngleSensor: AngleSensor<Error = TAngleSensorError> + 'a,
-    TMotorDriver: MotorDriver + 'a,
+    TAngleSensor: AngleSensor<Error = TAngleSensorError>,
+    TMotorDriver: MotorDriver,
 {
-    angle_sensor: &'a mut TAngleSensor,
-    motor_driver: &'a mut TMotorDriver,
+    angle_sensor: TAngleSensor,
+    motor_driver: TMotorDriver,
 }
 
-impl<'a, TAngleSensor, TAngleSensorError, TMotorDriver>
-    MotorController<'a, TAngleSensor, TAngleSensorError, TMotorDriver>
+impl<TAngleSensor, TAngleSensorError, TMotorDriver>
+    MotorController<TAngleSensor, TAngleSensorError, TMotorDriver>
 where
-    TAngleSensor: AngleSensor<Error = TAngleSensorError> + 'a,
-    TMotorDriver: MotorDriver + 'a,
+    TAngleSensor: AngleSensor<Error = TAngleSensorError>,
+    TMotorDriver: MotorDriver,
+    TAngleSensorError: Format,
 {
+    pub fn new(angle_sensor: TAngleSensor, motor_driver: TMotorDriver) -> Self {
+        Self {
+            angle_sensor,
+            motor_driver,
+        }
+    }
+
     pub async fn run(&mut self) -> Result<(), Error<TAngleSensorError>> {
         let result = self.run_until_error().await;
         self.disable();
@@ -52,11 +61,12 @@ where
 
         // TODO replace i_d and i_q with calculated value
         let (alpha, beta) = park_transformation::inverse(i16::MAX, 0, &electrical_angle);
+
         let (a, b, c) = clarke_transformation::inverse(alpha, beta);
 
-        // TODO convert current into required pwm signals
-        // TODO drive motor
+        // TODO convert current into voltage with current loop
 
+        self.motor_driver.set_voltages(a, b, c);
         Ok(())
     }
 
@@ -65,7 +75,7 @@ where
     }
 }
 
-#[derive(Debug)]
-pub enum Error<TAngleSensorError> {
+#[derive(Debug, Format)]
+pub enum Error<TAngleSensorError: Format> {
     AngleSensorError(TAngleSensorError),
 }

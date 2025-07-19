@@ -43,19 +43,19 @@ impl<'d> MotorDriver<'d> {
 
 impl motor_driver::MotorDriver for MotorDriver<'_> {
     fn enable(&mut self) {
-        self.set_pwm_values(0, 0, 0);
+        self.set_voltages(0, 0, 0);
         self.set_pwm_enabled(true);
     }
 
-    fn set_pwm_values(&mut self, a: u16, b: u16, c: u16) {
-        Self::set_duty_cycle(&mut self.a, a);
-        Self::set_duty_cycle(&mut self.b, b);
-        Self::set_duty_cycle(&mut self.c, c);
+    fn set_voltages(&mut self, ua: i16, ub: i16, uc: i16) {
+        Self::set_voltage(&mut self.a, ua);
+        Self::set_voltage(&mut self.b, ub);
+        Self::set_voltage(&mut self.c, uc);
     }
 
     fn disable(&mut self) {
         self.set_pwm_enabled(false);
-        self.set_pwm_values(0, 0, 0);
+        self.set_voltages(0, 0, 0);
     }
 }
 
@@ -66,6 +66,11 @@ impl MotorDriver<'_> {
             batch.enable(&self.b);
             batch.enable(&self.c);
         });
+    }
+
+    fn set_voltage(channel: &mut Pwm, voltage: i16) {
+        let dc = ((voltage as i32 + i16::MAX as i32) / 2) as u16;
+        Self::set_duty_cycle(channel, dc);
     }
 
     fn set_duty_cycle(channel: &mut Pwm, duty_cycle: u16) {

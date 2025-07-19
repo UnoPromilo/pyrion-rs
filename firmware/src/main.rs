@@ -3,12 +3,14 @@
 
 use crate::as5600_angle_sensor::AS5600Sensor;
 use crate::rp_motor_driver::MotorDriver;
+use as5600::Error;
+use bldc_logic::motor_controller::MotorController;
 use defmt::{info, warn};
 use embassy_executor::Spawner;
+use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::{bind_interrupts, i2c, peripherals, uart, watchdog};
-use embassy_time::{Duration};
+use embassy_time::{Duration, Timer};
 use embedded_io_async::Read;
-use hardware_abstraction::motor_driver::MotorDriver as _;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -26,7 +28,7 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     //let mut watchdog = init_watchdog(p.WATCHDOG);
-    let mut motor_driver = init_motor_driver(
+    let driver = init_motor_driver(
         p.PWM_SLICE2,
         p.PIN_4,
         p.PIN_5,
@@ -37,17 +39,14 @@ async fn main(spawner: Spawner) {
         p.PIN_8,
         p.PIN_9,
     );
-    let _as5600_sensor = init_as5600(p.I2C1, p.PIN_15, p.PIN_14).await;
+    let as5600_sensor = init_as5600(p.I2C1, p.PIN_15, p.PIN_14).await;
+
+    let controller = MotorController::new(as5600_sensor, driver);
+
     let uart = init_uart(p.UART0, p.PIN_0, p.PIN_1);
     let (_, rx) = uart.split();
     spawner.must_spawn(reader(rx));
-
-    motor_driver.init();
-    motor_driver.enable();
-    loop {
-        // set correct values
-        //watchdog.feed();
-    }
+    spawner.must_spawn(motor_driver(controller));
 }
 
 #[allow(dead_code)]
@@ -111,5 +110,25 @@ async fn reader(mut rx: uart::BufferedUartRx<'static, peripherals::UART0>) {
             Err(err) => warn!("read {} bytes, err = {:?}", buf.len(), err),
         }
         info!("RX {:?}", buf);
+    }
+}
+
+#[embassy_executor::task]
+async fn motor_driver(
+    mut controller: MotorController<
+        AS5600Sensor<I2c<'static, peripherals::I2C1, Async>>,
+        Error,
+        MotorDriver<'static>,
+    >,
+) {
+    loop {
+        info!("Starting motor...");
+        Timer::after(Duration::from_secs(1)).await;
+        match controller.run().await {
+            Ok(_) => info!("Motor driver finished"),
+            Err(error) => warn!("Motor driver failed: {}", error),
+        }
+        info!("Stopping motor...");
+        Timer::after(Duration::from_secs(1)).await;
     }
 }

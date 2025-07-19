@@ -1,6 +1,7 @@
+use defmt::Format;
 use embedded_hal_async::i2c;
 
-#[derive(Debug)]
+#[derive(Debug, Format)]
 pub enum Error {
     I2c(i2c::ErrorKind),
 }
