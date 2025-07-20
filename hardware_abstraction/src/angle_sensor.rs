@@ -1,4 +1,4 @@
-use crate::units::Angle;
+use crate::models::Angle;
 
 pub trait AngleSensor {
     type Error;

@@ -1,5 +1,5 @@
 use core::f32::consts::PI;
-pub use hardware_abstraction::units::Angle;
+pub use hardware_abstraction::models::Angle;
 use micromath::F32Ext;
 
 pub struct ElectricalAngle(pub u16);

@@ -24,13 +24,6 @@ const FRAC_SQRT_3_2_Q15: i32 = 28377;
 /// - The function assumes ideal conditions (no offset, noise, or imbalance)
 /// - Internally uses `FRAC_SQRT_3_2_Q15` (√3 / 2 in Q15 format)
 /// - This function is deterministic and panic-free (does not overflow)
-///
-/// # Example
-/// ```rust
-/// use bldc_logic::helpers::clarke_transformation::inverse;
-/// let (a, b, c) = inverse(16384, 16384);
-/// assert_eq!(a + b + c, 0); // three-phase sum is zero
-/// ```
 pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
     assert_no_i16_overflow(alpha, beta);
     let a = alpha;

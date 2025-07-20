@@ -1,8 +1,8 @@
-use bldc_logic::helpers;
 use embassy_rp::pwm;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embedded_hal::pwm::SetDutyCycle;
 use hardware_abstraction::motor_driver;
+use crate::map::map;
 
 const CLOCK_FREQUENCY: u32 = 125_000_000;
 const DESIRED_FREQ: u32 = 20_000;
@@ -74,7 +74,7 @@ impl MotorDriver<'_> {
     }
 
     fn set_duty_cycle(channel: &mut Pwm, duty_cycle: u16) {
-        let duty_cycle = helpers::map(duty_cycle, u16::MAX, PWM_PERIOD);
+        let duty_cycle = map(duty_cycle, u16::MAX, PWM_PERIOD);
         let (high, low) = channel.split_by_ref();
         let high_duty_cycle = (duty_cycle - HALF_DEAD_TIME).max(0);
         let low_duty_cycle = (duty_cycle + HALF_DEAD_TIME).min(PWM_PERIOD);

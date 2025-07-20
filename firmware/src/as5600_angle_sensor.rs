@@ -1,5 +1,5 @@
 use embedded_hal_async::i2c;
-use hardware_abstraction::units::Angle;
+use hardware_abstraction::models::Angle;
 
 type Device<I2C> = as5600::AS5600<I2C>;
 

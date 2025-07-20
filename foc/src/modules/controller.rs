@@ -1,29 +1,31 @@
-use crate::helpers::{clarke_transformation, park_transformation};
-use crate::motor_controller::Config;
-use crate::motor_controller::units::ElectricalAngle;
+use crate::modules::clarke_transformation;
+use crate::modules::park_transformation;
+use crate::modules::shaft;
+use crate::modules::shaft::Shaft;
 use defmt::Format;
 use hardware_abstraction::angle_sensor::AngleSensor;
 use hardware_abstraction::motor_driver::MotorDriver;
 
-pub struct MotorController<TAngleSensor, TAngleSensorError, TMotorDriver>
+pub struct Controller<TAngleSensor, TAngleSensorError, TMotorDriver>
 where
     TAngleSensor: AngleSensor<Error = TAngleSensorError>,
     TMotorDriver: MotorDriver,
 {
-    angle_sensor: TAngleSensor,
+    shaft: Shaft<TAngleSensor>,
     motor_driver: TMotorDriver,
 }
 
 impl<TAngleSensor, TAngleSensorError, TMotorDriver>
-    MotorController<TAngleSensor, TAngleSensorError, TMotorDriver>
+    Controller<TAngleSensor, TAngleSensorError, TMotorDriver>
 where
     TAngleSensor: AngleSensor<Error = TAngleSensorError>,
     TMotorDriver: MotorDriver,
     TAngleSensorError: Format,
 {
     pub fn new(angle_sensor: TAngleSensor, motor_driver: TMotorDriver) -> Self {
+        let shaft = Shaft::new(angle_sensor);
         Self {
-            angle_sensor,
+            shaft,
             motor_driver,
         }
     }
@@ -35,33 +37,24 @@ where
     }
 
     async fn run_until_error(&mut self) -> Result<(), Error<TAngleSensorError>> {
-        let config = self.init()?;
+        self.init().await?;
 
         loop {
-            self.on_tick(&config).await?;
+            self.on_tick().await?;
         }
     }
 
-    fn init(&mut self) -> Result<Config, Error<TAngleSensorError>> {
+    async fn init(&mut self) -> Result<(), Error<TAngleSensorError>> {
         self.motor_driver.enable();
-        Ok(Config::default())
+        self.shaft.init(&mut self.motor_driver).await?;
+        Ok(())
     }
 
-    async fn on_tick(&mut self, config: &Config) -> Result<(), Error<TAngleSensorError>> {
-        // take fresh angle reading
-        let angle = self
-            .angle_sensor
-            .read_angle_u16()
-            .await
-            .map_err(Error::AngleSensorError)?;
-
-        // convert to electrical angle
-        let electrical_angle =
-            ElectricalAngle::from_angle(&angle, config.angle_offset, config.pole_pairs);
+    async fn on_tick(&mut self) -> Result<(), Error<TAngleSensorError>> {
+        let (angle, electrical_angle) = self.shaft.read_angle_async().await?;
 
         // TODO replace i_d and i_q with calculated value
         let (alpha, beta) = park_transformation::inverse(i16::MAX, 0, &electrical_angle);
-
         let (a, b, c) = clarke_transformation::inverse(alpha, beta);
 
         // TODO convert current into voltage with current loop
@@ -77,5 +70,11 @@ where
 
 #[derive(Debug, Format)]
 pub enum Error<TAngleSensorError: Format> {
-    AngleSensorError(TAngleSensorError),
+    ShaftError(shaft::Error<TAngleSensorError>),
+}
+
+impl<TAngleSensorError: Format> From<shaft::Error<TAngleSensorError>> for Error<TAngleSensorError> {
+    fn from(value: shaft::Error<TAngleSensorError>) -> Self {
+        Self::ShaftError(value)
+    }
 }

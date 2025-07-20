@@ -1,9 +1,0 @@
-[package]
-name = "bldc-logic"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-micromath = "2.1.0"
-defmt = "1.0.1"
-hardware-abstraction = { path = "../hardware_abstraction" }

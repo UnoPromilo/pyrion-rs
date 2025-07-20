@@ -1,4 +1,4 @@
-use crate::motor_controller::units::ElectricalAngle;
+use crate::modules::models::ElectricalAngle;
 
 /// Performs the inverse Park transformation.
 ///
@@ -24,15 +24,6 @@ use crate::motor_controller::units::ElectricalAngle;
 /// - Uses fixed-point arithmetic (`Q15`) throughout
 /// - Internally applies right-shift by 15 to scale down 32-bit intermediate results
 /// - This function is deterministic and does not panic or overflow
-///
-/// # Example
-/// ```rust
-/// use bldc_logic::helpers::park_transformation::inverse;
-/// use bldc_logic::motor_controller::units::{Angle, ElectricalAngle};
-/// let angle = ElectricalAngle::from_angle(&Angle::from_degrees(30), 0, 1);
-/// let (alpha, beta) = inverse(16384, 0, &angle);
-/// assert!(alpha.abs() > 0);
-/// ```
 pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &ElectricalAngle) -> (i16, i16) {
     let sin_theta = electrical_angle.sin_q15();
     let cos_theta = electrical_angle.cos_q15();
@@ -46,7 +37,7 @@ pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &ElectricalAngle) -> (i16, 
 mod tests {
     use super::*;
     use core::f32::consts::FRAC_1_SQRT_2;
-    use hardware_abstraction::units::Angle;
+    use hardware_abstraction::models::Angle;
 
     const TOLERANCE: i16 = 3;
 

@@ -4,7 +4,7 @@
 use crate::as5600_angle_sensor::AS5600Sensor;
 use crate::rp_motor_driver::MotorDriver;
 use as5600::Error;
-use bldc_logic::motor_controller::MotorController;
+
 use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_rp::i2c::{Async, I2c};
@@ -16,6 +16,7 @@ use {defmt_rtt as _, panic_probe as _};
 
 mod as5600_angle_sensor;
 mod command_task;
+mod map;
 mod rp_motor_driver;
 
 bind_interrupts!(struct Irqs {
@@ -41,7 +42,7 @@ async fn main(spawner: Spawner) {
     );
     let as5600_sensor = init_as5600(p.I2C1, p.PIN_15, p.PIN_14).await;
 
-    let controller = MotorController::new(as5600_sensor, driver);
+    let controller = foc::Controller::new(as5600_sensor, driver);
 
     let uart = init_uart(p.UART0, p.PIN_0, p.PIN_1);
     let (_, rx) = uart.split();
@@ -115,7 +116,7 @@ async fn reader(mut rx: uart::BufferedUartRx<'static, peripherals::UART0>) {
 
 #[embassy_executor::task]
 async fn motor_driver(
-    mut controller: MotorController<
+    mut controller: foc::Controller<
         AS5600Sensor<I2c<'static, peripherals::I2C1, Async>>,
         Error,
         MotorDriver<'static>,
