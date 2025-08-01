@@ -1,6 +1,6 @@
 #![no_std]
 
-mod modules;
+pub mod modules;
 mod state;
 
-pub use modules::Controller;
+pub use state::Motor;

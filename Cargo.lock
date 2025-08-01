@@ -618,6 +618,7 @@ dependencies = [
  "hardware-abstraction",
  "panic-probe",
  "portable-atomic",
+ "shared",
  "static_cell",
 ]
 
@@ -650,9 +651,11 @@ name = "foc"
 version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
+ "embassy-sync 0.7.0",
  "embassy-time",
  "hardware-abstraction",
  "micromath",
+ "shared",
 ]
 
 [[package]]
@@ -710,6 +713,7 @@ name = "hardware-abstraction"
 version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
+ "shared",
 ]
 
 [[package]]
@@ -1212,6 +1216,13 @@ checksum = "75872d278a8f37ef87fa0ddbda7802605cb18344497949862c0d4dcb291eba60"
 dependencies = [
  "digest",
  "keccak",
+]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
 ]
 
 [[package]]

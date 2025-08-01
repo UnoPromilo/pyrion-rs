@@ -8,3 +8,5 @@ micromath = "2.1.0"
 defmt = "1.0.1"
 hardware-abstraction = { path = "../hardware_abstraction" }
 embassy-time = { version = "0.4.0", features = ["defmt"] }
+embassy-sync = "0.7.0"
+shared = { path = "../shared" }
