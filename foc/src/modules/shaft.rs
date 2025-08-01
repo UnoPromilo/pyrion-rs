@@ -1,24 +1,27 @@
 use crate::modules::models::ElectricalAngle;
 use crate::modules::{clarke_transformation, park_transformation};
-use defmt::Format;
-use embassy_time::{Duration, Ticker};
+use defmt::{Format, info, warn};
+use embassy_time::{Duration, Ticker, Timer};
 use hardware_abstraction::angle_sensor::AngleSensor;
 use hardware_abstraction::models::{Angle, Direction};
 use hardware_abstraction::motor_driver::MotorDriver;
 
 const U_CALIBRATION: i16 = i16::MAX / 4;
-const MINIMAL_MOVEMENT: u16 = 360 / 10; // It will work for any motor that has at least 9 pole pairs TODO verify by changing to 7, 6 and 8
+const MINIMAL_MOVEMENT: u16 = 360 / 6 / 10; // It will work for any motor that has at least 9 pole pairs TODO verify by changing to 7, 6 and 8
+const POLE_PAIR_ESTIMATION_RANGE_FACTOR: u16 = 50; // Range is ideal value +- this const * idealValue
+const MINIMAL_POLE_PAIRS: u16 = 2;
+const MAXIMAL_POLE_PAIRS: u16 = 15;
 
 pub struct Shaft<TAngleSensor> {
     sensor: TAngleSensor,
     config: Option<Config>,
 }
 
-#[derive(Debug, Copy, Clone)]
-struct Config {
-    offset: u16,
-    pole_pairs: u8,
-    natural_direction: NaturalDirection,
+#[derive(Debug, Copy, Clone, Format)]
+pub struct Config {
+    pub offset: u16,
+    pub pole_pairs: u8,
+    pub natural_direction: NaturalDirection,
 }
 
 impl<TAngleSensor: AngleSensor> Shaft<TAngleSensor> {
@@ -33,17 +36,49 @@ impl<TAngleSensor: AngleSensor> Shaft<TAngleSensor> {
 impl<TAngleSensor: AngleSensor<Error = TAngleSensorError>, TAngleSensorError: Format>
     Shaft<TAngleSensor>
 {
+    #[allow(dead_code)]
+
     pub async fn init(
         &mut self,
         driver: &mut impl MotorDriver,
     ) -> Result<(), Error<TAngleSensorError>> {
-        let natural_direction = self.find_natural_direction(driver).await?;
+        // Move backward 1 electrical revolution:
+        driver.enable();
+        let (alpha, beta) = park_transformation::inverse(0, U_CALIBRATION, &ElectricalAngle(0));
+        let (a, b, c) = clarke_transformation::inverse(alpha, beta);
+        driver.set_voltages(a, b, c);
+        Self::move_from_to(driver, 0, u16::MAX).await;
+        let end_angle = self.read_raw_angle().await?;
+        Self::move_from_to(driver, 0, u16::MAX).await;
+        let middle_angle = self.read_raw_angle().await?;
+
+        Timer::after(Duration::from_millis(100)).await;
+        driver.disable();
+
+        info!("Middle_angle: {:?}", middle_angle);
+        info!("end_angle: {:?}", end_angle);
+
+        let natural_direction = Self::find_natural_direction(&middle_angle, &end_angle)?;
+        let pole_pairs = Self::estimate_pole_pairs(&middle_angle, &end_angle)?;
+        let offset = Self::estimate_offset(&end_angle, pole_pairs);
+
         self.config = Some(Config {
-            pole_pairs: 7, // TODO calculate
-            offset: 0,     // TODO calculate
+            pole_pairs,
+            offset,
             natural_direction,
         });
+
+        info!(
+            "Shaft initialized with discovered values: {:#?}",
+            self.config
+        );
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn init_with_config(&mut self, config: Config) {
+        self.config = Some(config);
+        info!("Shaft initialized manually with config: {:#?}", self.config);
     }
 
     pub async fn read_angle_async(
@@ -56,40 +91,43 @@ impl<TAngleSensor: AngleSensor<Error = TAngleSensorError>, TAngleSensorError: Fo
         Ok((angle, electrical_angle))
     }
 
-    async fn find_natural_direction(
-        &mut self,
-        driver: &mut impl MotorDriver,
+    fn find_natural_direction(
+        start_angle: &Angle,
+        end_angle: &Angle,
     ) -> Result<NaturalDirection, Error<TAngleSensorError>> {
-        // Move backward 1 electrical revolution:
-        Self::move_one_rotation(driver, true).await;
-        let middle_angle = self.read_raw_angle().await?;
-        // Move forward 1 electrical revolution:
-        Self::move_one_rotation(driver, false).await;
-        let end_angle = self.read_raw_angle().await?;
-        driver.set_voltages(0, 0, 0);
-        let delta = middle_angle.get_abs(&end_angle);
-        Self::disable_motor(driver);
+        let delta = start_angle.get_abs(&end_angle);
+
+        info!("Delta: {:?}", delta.to_degrees());
 
         if delta.to_degrees() < MINIMAL_MOVEMENT {
             return Err(Error::NoMovement);
         }
 
-        match middle_angle.get_direction(&end_angle) {
+        match start_angle.get_direction(&end_angle) {
             None => Err(Error::NoMovement),
             Some(Direction::CounterClockwise) => Ok(NaturalDirection::CounterClockwise),
             Some(Direction::Clockwise) => Ok(NaturalDirection::Clockwise),
         }
     }
 
-    async fn move_one_rotation(driver: &mut impl MotorDriver, backward: bool) {
-        let mut ticker = Ticker::every(Duration::from_millis(2));
-        const STEPS: u16 = u8::MAX as u16;
+    async fn move_from_to(
+        driver: &mut impl MotorDriver,
+        from: u16,
+        to: u16,
+    ) {
+        let mut ticker = Ticker::every(Duration::from_hz(2056));
+        const STEPS: u16 = 256;
+        let diff = to as i32 - from as i32;
+
         for index in 0..=STEPS {
-            let angle = ElectricalAngle(match backward {
-                true => (STEPS - index) << 8,
-                false => index << 8,
+            let angle = ElectricalAngle(if diff > 0 {
+                from + diff as u16 / STEPS * index
+            } else {
+                from - diff.abs() as u16 / STEPS * index
             });
-            let (alpha, beta) = park_transformation::inverse(U_CALIBRATION, 0, &angle);
+
+
+            let (alpha, beta) = park_transformation::inverse(0, U_CALIBRATION, &angle);
             let (a, b, c) = clarke_transformation::inverse(alpha, beta);
             driver.set_voltages(a, b, c);
             ticker.next().await;
@@ -103,8 +141,27 @@ impl<TAngleSensor: AngleSensor<Error = TAngleSensorError>, TAngleSensorError: Fo
             .map_err(Error::AngleSensorError)
     }
 
-    fn disable_motor(driver: &mut impl MotorDriver) {
-        driver.set_voltages(0, 0, 0);
+    fn estimate_pole_pairs(
+        angle_1: &Angle,
+        angle_2: &Angle,
+    ) -> Result<u8, Error<TAngleSensorError>> {
+        let delta = angle_1.get_abs(&angle_2);
+        let raw_delta = delta.get_raw();
+        for pole_pair in MINIMAL_POLE_PAIRS..=MAXIMAL_POLE_PAIRS {
+            let ideal_angle = u16::MAX / pole_pair;
+            let lower_limit = ideal_angle - (ideal_angle / POLE_PAIR_ESTIMATION_RANGE_FACTOR);
+            let upper_limit = ideal_angle + (ideal_angle / POLE_PAIR_ESTIMATION_RANGE_FACTOR);
+            if (lower_limit <= raw_delta) && (upper_limit > raw_delta) {
+                return Ok(pole_pair as u8);
+            }
+        }
+
+        Err(Error::UnknownCountOfPolePairs)
+    }
+
+    fn estimate_offset(start_angle: &Angle, pole_pairs: u8) -> u16 {
+        let period = u16::MAX / pole_pairs as u16;
+        start_angle.get_raw() % period
     }
 }
 
@@ -112,11 +169,12 @@ impl<TAngleSensor: AngleSensor<Error = TAngleSensorError>, TAngleSensorError: Fo
 pub enum Error<TAngleSensorError: Format> {
     NotInitialized,
     NoMovement,
+    UnknownCountOfPolePairs,
     AngleSensorError(TAngleSensorError),
 }
 
-#[derive(Debug, Copy, Clone)]
-enum NaturalDirection {
+#[derive(Debug, Copy, Clone, Format)]
+pub enum NaturalDirection {
     Clockwise,
     CounterClockwise,
 }

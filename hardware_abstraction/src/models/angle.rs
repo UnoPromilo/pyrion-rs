@@ -1,6 +1,8 @@
+use defmt::Format;
 use crate::models::Direction;
 
-pub struct Angle(pub u16);
+#[derive(Format)]
+pub struct Angle(u16);
 
 impl Angle {
     /// Returns always the smallest distance between two angles, always positive, wraps 360->0
@@ -24,6 +26,14 @@ impl Angle {
         }
     }
 
+    pub fn get_raw(&self) -> u16 {
+        self.0
+    }
+
+    pub fn from_raw(raw: u16) -> Self {
+        Angle(raw)
+    }
+
     // to use only in tests
     pub fn from_degrees(degrees: u16) -> Self {
         debug_assert!(degrees < 360);
@@ -38,8 +48,8 @@ impl Angle {
 
 #[cfg(test)]
 mod test {
-    use alloc::vec;
     use super::*;
+    use alloc::vec;
 
     const TOLERANCE: u16 = 1;
 

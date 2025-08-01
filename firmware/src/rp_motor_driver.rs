@@ -1,3 +1,4 @@
+use defmt::info;
 use embassy_rp::pwm;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embedded_hal::pwm::SetDutyCycle;
@@ -6,8 +7,8 @@ use crate::map::map;
 
 const CLOCK_FREQUENCY: u32 = 125_000_000;
 const DESIRED_FREQ: u32 = 20_000;
-const PWM_PERIOD: u16 = (CLOCK_FREQUENCY / DESIRED_FREQ / 2) as u16;
-const HALF_DEAD_TIME: u16 = 31; //*2 =  496ns, should be enough
+const PWM_PERIOD: i32 = (CLOCK_FREQUENCY / DESIRED_FREQ / 2) as i32;
+const HALF_DEAD_TIME: i32 = 31; //*2 =  496ns, should be enough
 
 pub struct MotorDriver<'d> {
     a: Pwm<'d>,
@@ -26,7 +27,7 @@ pub fn new_pwm_synced<'a, T: Slice>(
     config.enable = false;
     config.compare_a = 0;
     config.compare_b = 0;
-    config.top = PWM_PERIOD;
+    config.top = PWM_PERIOD as u16;
 
     let mut pwm = Pwm::new_output_ab(slice, high_pin, low_pin, config);
     // Safe because 0 is always less than max duty
@@ -45,6 +46,7 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
     fn enable(&mut self) {
         self.set_voltages(0, 0, 0);
         self.set_pwm_enabled(true);
+        info!("Motor driver enabled");
     }
 
     fn set_voltages(&mut self, ua: i16, ub: i16, uc: i16) {
@@ -56,6 +58,7 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
     fn disable(&mut self) {
         self.set_pwm_enabled(false);
         self.set_voltages(0, 0, 0);
+        info!("Motor driver disabled");
     }
 }
 
@@ -74,10 +77,10 @@ impl MotorDriver<'_> {
     }
 
     fn set_duty_cycle(channel: &mut Pwm, duty_cycle: u16) {
-        let duty_cycle = map(duty_cycle, u16::MAX, PWM_PERIOD);
+        let duty_cycle = map(duty_cycle, u16::MAX, PWM_PERIOD as u16) as i32;
         let (high, low) = channel.split_by_ref();
-        let high_duty_cycle = (duty_cycle - HALF_DEAD_TIME).max(0);
-        let low_duty_cycle = (duty_cycle + HALF_DEAD_TIME).min(PWM_PERIOD);
+        let high_duty_cycle = (duty_cycle - HALF_DEAD_TIME).max(0) as u16;
+        let low_duty_cycle = (duty_cycle + HALF_DEAD_TIME).min(PWM_PERIOD) as u16;
 
         high.expect("High channel is mandatory")
             .set_duty_cycle(high_duty_cycle)

@@ -60,9 +60,9 @@ impl Config {
         Self {
             start_angle: 0,
             end_angle: 4095,
-            hysteresis: Hysteresis::Off,
-            fast_filter_threshold: FastFilterThreshold::SlowFilterOnly,
-            slow_filter: SlowFilter::X2,
+            hysteresis: Hysteresis::LSB2,
+            fast_filter_threshold: FastFilterThreshold::LSB6,
+            slow_filter: SlowFilter::X8,
         }
     }
 

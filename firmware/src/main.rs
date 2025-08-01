@@ -7,7 +7,6 @@ use as5600::Error;
 
 use defmt::{info, warn};
 use embassy_executor::Spawner;
-use embassy_rp::i2c::{Async, I2c};
 use embassy_rp::{bind_interrupts, i2c, peripherals, uart, watchdog};
 use embassy_time::{Duration, Timer};
 use embedded_io_async::Read;
@@ -20,7 +19,7 @@ mod map;
 mod rp_motor_driver;
 
 bind_interrupts!(struct Irqs {
-    I2C1_IRQ => i2c::InterruptHandler<peripherals::I2C1>;
+    I2C0_IRQ => i2c::InterruptHandler<peripherals::I2C0>;
     UART0_IRQ => uart::BufferedInterruptHandler<peripherals::UART0>;
 });
 
@@ -40,7 +39,7 @@ async fn main(spawner: Spawner) {
         p.PIN_8,
         p.PIN_9,
     );
-    let as5600_sensor = init_as5600(p.I2C1, p.PIN_15, p.PIN_14).await;
+    let as5600_sensor = init_as5600(p.I2C0, p.PIN_16, p.PIN_17).await;
 
     let controller = foc::Controller::new(as5600_sensor, driver);
 
@@ -77,11 +76,12 @@ fn init_motor_driver(
 }
 
 async fn init_as5600(
-    i2c: peripherals::I2C1,
-    sda: peripherals::PIN_15,
-    scl: peripherals::PIN_14,
-) -> AS5600Sensor<i2c::I2c<'static, peripherals::I2C1, i2c::Async>> {
-    let i2c_config = i2c::Config::default();
+    i2c: peripherals::I2C0,
+    scl: peripherals::PIN_16,
+    sda: peripherals::PIN_17,
+) -> AS5600Sensor<i2c::I2c<'static, peripherals::I2C0, i2c::Async>> {
+    let mut i2c_config = i2c::Config::default();
+    i2c_config.frequency = 1_000_000;
     let i2c = i2c::I2c::new_async(i2c, sda, scl, Irqs, i2c_config);
     let as5600_config = as5600::Config::default();
     let as5600 = as5600::AS5600::new(i2c, as5600_config).await.unwrap();
@@ -117,7 +117,7 @@ async fn reader(mut rx: uart::BufferedUartRx<'static, peripherals::UART0>) {
 #[embassy_executor::task]
 async fn motor_driver(
     mut controller: foc::Controller<
-        AS5600Sensor<I2c<'static, peripherals::I2C1, Async>>,
+        AS5600Sensor<i2c::I2c<'static, peripherals::I2C0, i2c::Async>>,
         Error,
         MotorDriver<'static>,
     >,
@@ -130,6 +130,6 @@ async fn motor_driver(
             Err(error) => warn!("Motor driver failed: {}", error),
         }
         info!("Stopping motor...");
-        Timer::after(Duration::from_secs(1)).await;
+        Timer::after(Duration::from_millis(400)).await;
     }
 }

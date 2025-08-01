@@ -708,6 +708,9 @@ dependencies = [
 [[package]]
 name = "hardware-abstraction"
 version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+]
 
 [[package]]
 name = "hash32"

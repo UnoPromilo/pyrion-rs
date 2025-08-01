@@ -21,6 +21,6 @@ where
 
     async fn read_angle_u16(&mut self) -> Result<Angle, Self::Error> {
         let value = self.device.read_angle().await?;
-        Ok(Angle(value << 4))
+        Ok(Angle::from_raw(value << 4))
     }
 }

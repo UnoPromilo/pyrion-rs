@@ -6,7 +6,10 @@ pub struct ElectricalAngle(pub u16);
 
 impl ElectricalAngle {
     pub fn from_angle(angle: &Angle, offset: u16, pole_pairs: u8) -> Self {
-        Self(((angle.0.wrapping_sub(offset) as u32 * pole_pairs as u32) % u16::MAX as u32) as u16)
+        Self(
+            ((angle.get_raw().wrapping_sub(offset) as u32 * pole_pairs as u32) % u16::MAX as u32)
+                as u16,
+        )
     }
 
     // TODO remove

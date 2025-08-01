@@ -15,27 +15,33 @@ where
 {
     pub async fn new(i2c: I2C, config: Config) -> Result<Self> {
         let mut as5600 = Self { i2c };
-        as5600
+        as5600.write_config(config).await?;
+        Ok(as5600)
+    }
+
+    async fn write_config(&mut self, config: Config) -> Result<()> {
+        self
             .write_u8(Register::ConfHigh, config.get_high_config_byte())
             .await?;
-        as5600
+        self
             .write_u8(Register::ConfLow, config.get_low_config_byte())
             .await?;
 
-        as5600
+        self
             .write_u8(Register::ZPosHigh, config.get_high_z_pos())
             .await?;
-        as5600
+        self
             .write_u8(Register::ZPosLow, config.get_low_z_pos())
             .await?;
 
-        as5600
+        self
             .write_u8(Register::MPosHigh, config.get_high_m_pos())
             .await?;
-        as5600
+        self
             .write_u8(Register::MPosLow, config.get_low_m_pos())
             .await?;
-        Ok(as5600)
+
+        Ok(())
     }
 
     pub async fn read_raw_angle(&mut self) -> Result<u16> {
