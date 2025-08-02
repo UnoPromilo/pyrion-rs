@@ -1,5 +1,7 @@
-use shared::units::{Current, Resistance, Voltage};
 use defmt::Format;
+use shared::units::{Current, Resistance, Voltage};
+
+const SHIFT: u8 = 32;
 
 #[derive(Debug, Format)]
 pub struct ConversionConstants {
@@ -14,8 +16,6 @@ pub fn calculate_scaling_constants(
     shunt_resistor: Resistance,
     gain: u8,
 ) -> ConversionConstants {
-    const SHIFT: u32 = 32;
-
     let v_ref_mv = v_ref.as_millivolts() as u64;
     let shunt_mohm = shunt_resistor.as_milliohms() as u64;
     let adc_to_mv_scale = (v_ref_mv << SHIFT) / 4095;
@@ -30,8 +30,6 @@ pub fn calculate_scaling_constants(
 
 #[inline(always)]
 pub fn from_adc_to_current(raw: u16, constants: &ConversionConstants) -> Current {
-    const SHIFT: u8 = 32;
-
     let v_mv_fp = (raw as u64 * constants.adc_to_mv_scale) >> SHIFT;
     let v_diff_mv = v_mv_fp as i64 - constants.v_ref_mid_mv;
     let current_ma = (v_diff_mv * constants.gain_scale as i64) >> SHIFT;

@@ -25,27 +25,13 @@ const FRAC_SQRT_3_2_Q15: i32 = 28377;
 /// - Internally uses `FRAC_SQRT_3_2_Q15` (√3 / 2 in Q15 format)
 /// - This function is deterministic and panic-free (does not overflow)
 pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
-    //assert_no_i16_overflow(alpha, beta);
+    // TODO convert to fixed
     let a = alpha;
     let b = (((-(alpha as i32)) >> 1) + ((beta as i32 * FRAC_SQRT_3_2_Q15) >> 15)) as i16;
     let c = (((-(alpha as i32)) >> 1) - ((beta as i32 * FRAC_SQRT_3_2_Q15) >> 15)) as i16;
     (a, b, c)
 }
 
-#[inline]
-fn assert_no_i16_overflow(alpha: i16, beta: i16) {
-    let sum = alpha as i32 + beta as i32;
-    let diff = alpha as i32 - beta as i32;
-    assert!(
-        sum <= i16::MAX as i32
-            && sum >= i16::MIN as i32
-            && diff <= i16::MAX as i32
-            && diff >= i16::MIN as i32,
-        "alpha ± beta overflows i16: alpha = {}, beta = {}",
-        alpha,
-        beta
-    );
-}
 
 #[cfg(test)]
 mod tests {

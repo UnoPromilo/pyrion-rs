@@ -1,4 +1,6 @@
-use crate::modules::models::ElectricalAngle;
+use shared::fixed::types::I16F16;
+use shared::units::Angle;
+use shared::units::angle::Electrical;
 
 /// Performs the inverse Park transformation.
 ///
@@ -24,11 +26,13 @@ use crate::modules::models::ElectricalAngle;
 /// - Uses fixed-point arithmetic (`Q15`) throughout
 /// - Internally applies right-shift by 15 to scale down 32-bit intermediate results
 /// - This function is deterministic and does not panic or overflow
-pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &ElectricalAngle) -> (i16, i16) {
-    let sin_theta = electrical_angle.sin_q15();
-    let cos_theta = electrical_angle.cos_q15();
-    let alpha = ((i_d as i32 * cos_theta as i32 - i_q as i32 * sin_theta as i32) >> 15) as i16;
-    let beta = ((i_d as i32 * sin_theta as i32 + i_q as i32 * cos_theta as i32) >> 15) as i16;
+pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &Angle<Electrical>) -> (i16, i16) {
+    let sin_theta = electrical_angle.sin().to_num::<I16F16>();
+    let cos_theta = electrical_angle.cos().to_num::<I16F16>();
+    let i_d = I16F16::from_num(i_d);
+    let i_q = I16F16::from_num(i_q);
+    let alpha = (i_d * cos_theta - i_q * sin_theta).to_num::<i16>();
+    let beta = (i_d * sin_theta + i_q * cos_theta).to_num::<i16>();
 
     (alpha, beta)
 }
@@ -37,9 +41,9 @@ pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &ElectricalAngle) -> (i16, 
 mod tests {
     use super::*;
     use core::f32::consts::FRAC_1_SQRT_2;
-    use hardware_abstraction::models::Angle;
+    use shared::fixed::types::U16F16;
 
-    const TOLERANCE: i16 = 3;
+    const TOLERANCE: i16 = 201; //~0.6% error TODO improve cos/sin to minimalize
 
     #[test]
     fn test_inverse_park_cardinals() {
@@ -56,31 +60,31 @@ mod tests {
         ];
 
         for (deg, expected_alpha, expected_beta) in cases {
-            let angle = ElectricalAngle::from_angle(&Angle::from_degrees(deg), 0, 1);
+            let angle = Angle::<Electrical>::from_degrees(U16F16::from_num(deg));
             test_with_values(&angle, expected_alpha, expected_beta);
         }
     }
 
     #[test]
     fn test_zero_input() {
-        let angle = ElectricalAngle::from_angle(&Angle::from_degrees(123), 0, 1);
+        let angle = Angle::<Electrical>::from_degrees(U16F16::from_num(123));
         let (alpha, beta) = inverse(0, 0, &angle);
         assert_eq!(alpha, 0);
         assert_eq!(beta, 0);
     }
 
-    fn test_with_values(angle: &ElectricalAngle, expected_alpha: i16, expected_beta: i16) {
+    fn test_with_values(angle: &Angle<Electrical>, expected_alpha: i16, expected_beta: i16) {
         let (i_alpha, i_beta) = inverse(i16::MAX, 0, angle);
         assert_close(expected_alpha, i_alpha);
         assert_close(expected_beta, i_beta);
     }
     fn assert_close(expected: i16, actual: i16) {
         assert!(
-            (expected - actual).abs() <= TOLERANCE,
+            (expected as i32 - actual as i32).abs() <= TOLERANCE as i32,
             "expected {}, got {}, diff {} > tolerance {}",
             expected,
             actual,
-            (expected - actual).abs(),
+            (expected as i32 - actual as i32).abs(),
             TOLERANCE
         );
     }

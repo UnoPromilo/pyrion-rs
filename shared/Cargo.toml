@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 defmt = "1.0.1"
+fixed = "1.29.0"

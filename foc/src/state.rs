@@ -1,9 +1,11 @@
 use defmt::{Format, warn};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
+use embassy_time::Instant;
 use hardware_abstraction::current_sensor;
 use hardware_abstraction::current_sensor::CurrentReader;
-use shared::units::Current;
+use shared::units::angle::{AngleType, Electrical};
+use shared::units::{Angle, Current};
 
 #[derive(Debug, Format)]
 pub struct PhaseCurrent {
@@ -12,14 +14,22 @@ pub struct PhaseCurrent {
     c: Current,
 }
 
+pub struct ShaftData<NativeAngleType: AngleType> {
+    pub angle: Angle<NativeAngleType>,
+    pub electrical_angle: Angle<Electrical>,
+    pub measure_time: Instant,
+}
+
 pub struct Motor {
     power: Mutex<NoopRawMutex, Option<PhaseCurrent>>,
+    angle: Mutex<NoopRawMutex, Option<PhaseCurrent>>,
 }
 
 impl Motor {
     pub fn new() -> Self {
         Self {
             power: Mutex::new(None),
+            angle: Mutex::new(None),
         }
     }
 
