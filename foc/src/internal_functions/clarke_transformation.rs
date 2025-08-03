@@ -24,6 +24,8 @@ const FRAC_SQRT_3_2_Q15: i32 = 28377;
 /// - The function assumes ideal conditions (no offset, noise, or imbalance)
 /// - Internally uses `FRAC_SQRT_3_2_Q15` (√3 / 2 in Q15 format)
 /// - This function is deterministic and panic-free (does not overflow)
+// TODO remove if still not used
+#[allow(dead_code)]
 pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
     // TODO convert to fixed
     let a = alpha;
@@ -31,7 +33,6 @@ pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
     let c = (((-(alpha as i32)) >> 1) - ((beta as i32 * FRAC_SQRT_3_2_Q15) >> 15)) as i16;
     (a, b, c)
 }
-
 
 #[cfg(test)]
 mod tests {

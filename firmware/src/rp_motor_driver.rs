@@ -1,20 +1,23 @@
+use crate::map::map;
 use defmt::info;
 use embassy_rp::pwm;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embedded_hal::pwm::SetDutyCycle;
 use hardware_abstraction::motor_driver;
-use crate::map::map;
 
 const CLOCK_FREQUENCY: u32 = 125_000_000;
 const DESIRED_FREQ: u32 = 20_000;
 const PWM_PERIOD: i32 = (CLOCK_FREQUENCY / DESIRED_FREQ / 2) as i32;
-const HALF_DEAD_TIME: i32 = 31; //*2 =  496ns, should be enough
+const HALF_DEAD_TIME: i32 = 31; //*2 = 496 ns, should be enough
 
 pub struct MotorDriver<'d> {
     a: Pwm<'d>,
     b: Pwm<'d>,
     c: Pwm<'d>,
 }
+
+// TODO remove if still not used
+#[allow(dead_code)]
 pub fn new_pwm_synced<'a, T: Slice>(
     slice: T,
     high_pin: impl ChannelAPin<T> + 'a,
@@ -37,6 +40,8 @@ pub fn new_pwm_synced<'a, T: Slice>(
 }
 
 impl<'d> MotorDriver<'d> {
+    // TODO remove if still not used
+    #[allow(dead_code)]
     pub fn new(a: Pwm<'d>, b: Pwm<'d>, c: Pwm<'d>) -> Self {
         Self { a, b, c }
     }

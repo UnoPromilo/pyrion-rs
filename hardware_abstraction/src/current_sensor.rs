@@ -7,5 +7,6 @@ pub enum Output {
 
 pub trait CurrentReader {
     type Error: core::fmt::Debug;
+    
     async fn read(&mut self) -> Result<Output, Self::Error>;
 }

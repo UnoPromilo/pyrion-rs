@@ -26,6 +26,8 @@ use shared::units::angle::Electrical;
 /// - Uses fixed-point arithmetic (`Q15`) throughout
 /// - Internally applies right-shift by 15 to scale down 32-bit intermediate results
 /// - This function is deterministic and does not panic or overflow
+// TODO remove if still not used
+#[allow(dead_code)]
 pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &Angle<Electrical>) -> (i16, i16) {
     let sin_theta = electrical_angle.sin().to_num::<I16F16>();
     let cos_theta = electrical_angle.cos().to_num::<I16F16>();

@@ -1,9 +1,12 @@
 use crate::config::{CurrentConfig, CurrentMeasurementConfig};
+use defmt::{info, warn};
 use embassy_rp::adc::{Adc, AdcPin, Async};
 use embassy_rp::gpio::Pull;
 use embassy_rp::{Peripheral, adc, bind_interrupts, dma};
+use embassy_time::Timer;
 use foc::Motor;
-use foc::modules::adc_conversion::{
+use foc::current::CurrentMeasurement;
+use foc::functions::adc_conversion::{
     ConversionConstants, calculate_scaling_constants, from_adc_to_current,
 };
 use hardware_abstraction::current_sensor::{CurrentReader, Output};
@@ -73,8 +76,9 @@ where
 }
 
 #[embassy_executor::task]
-pub async fn update_current_dma(motor: &'static Motor, config: CurrentConfig) {
+pub async fn update_current_dma_task(motor: &'static Motor, config: CurrentConfig) {
     let adc = Adc::new(config.adc, Irqs, adc::Config::default());
+    info!("Initializing ADC...");
     let mut sensor = ThreePhaseCurrentSensor::new(
         adc,
         config.dma,
@@ -83,7 +87,22 @@ pub async fn update_current_dma(motor: &'static Motor, config: CurrentConfig) {
         config.phase_c,
         config.current_measurement_config,
     );
+
     loop {
-        motor.update_power(&mut sensor).await;
+        let result = update_current_dma_run_until_error(motor, &mut sensor).await;
+        if let Err(e) = result {
+            warn!("Error while operating ADC: {:?}", e);
+        }
+        info!("ADC will be restarted after 1 s.");
+        Timer::after_secs(1).await;
+    }
+}
+
+async fn update_current_dma_run_until_error<R: CurrentReader>(
+    motor: &'static Motor,
+    sensor: &mut R,
+) -> Result<(), R::Error> {
+    loop {
+        motor.update_current(sensor).await?;
     }
 }

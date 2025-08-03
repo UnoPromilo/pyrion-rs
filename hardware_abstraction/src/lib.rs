@@ -2,8 +2,8 @@
 #![allow(async_fn_in_trait)]
 
 pub mod angle_sensor;
-pub mod motor_driver;
 pub mod current_sensor;
+pub mod motor_driver;
 
 #[cfg(test)]
 extern crate alloc;

@@ -2,7 +2,9 @@ use embassy_rp::peripherals::*;
 use shared::units::{Resistance, Voltage};
 
 pub struct PhysicalConfig {
-    pub current_config: CurrentConfig,
+    pub current: CurrentConfig,
+    pub i2c: Option<I2cConfig>,
+    pub angle_sensor: AngleSensorConfig,
 }
 
 pub struct CurrentConfig {
@@ -20,11 +22,23 @@ pub struct CurrentMeasurementConfig {
     pub shunt_resistor: Resistance,
 }
 
+pub struct I2cConfig {
+    pub i2c: I2C0,
+    pub sda: PIN_16,
+    pub scl: PIN_17,
+}
+
+pub enum AngleSensorConfig {
+    #[allow(unused)]
+    OpenLoop,
+    As5600,
+}
+
 impl PhysicalConfig {
     pub fn rp2040() -> Self {
         let p = embassy_rp::init(Default::default());
         Self {
-            current_config: CurrentConfig {
+            current: CurrentConfig {
                 adc: p.ADC,
                 dma: p.DMA_CH0,
                 phase_a: p.PIN_26,
@@ -36,6 +50,12 @@ impl PhysicalConfig {
                     shunt_resistor: Resistance::from_milliohms(100),
                 },
             },
+            i2c: Some(I2cConfig {
+                i2c: p.I2C0,
+                scl: p.PIN_17,
+                sda: p.PIN_16,
+            }),
+            angle_sensor: AngleSensorConfig::As5600,
         }
     }
 }

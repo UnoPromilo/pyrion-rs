@@ -4,7 +4,9 @@ use core::marker::PhantomData;
 use defmt::Format;
 use fixed::types::{I1F15, U16F16};
 
+#[derive(Debug, Copy, Clone)]
 pub struct Electrical;
+#[derive(Debug, Copy, Clone)]
 pub struct Mechanical;
 
 pub trait AngleType {}
@@ -19,8 +21,14 @@ pub struct Angle<T: AngleType> {
     _kind: PhantomData<T>,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum AngleAny {
+    Electrical(Angle<Electrical>),
+    Mechanical(Angle<Mechanical>),
+}
+
 impl<T: AngleType> Angle<T> {
-    pub fn new_raw(raw_angle: u16) -> Self {
+    pub fn from_raw(raw_angle: u16) -> Self {
         Self {
             raw_angle,
             _kind: PhantomData,
@@ -83,7 +91,7 @@ impl<T: AngleType> Angle<T> {
 
 impl Angle<Electrical> {
     pub fn from(angle: &Angle<Mechanical>, offset: u16, pole_pairs: u16) -> Self {
-        Self::new_raw(
+        Self::from_raw(
             angle
                 .raw_angle
                 .wrapping_sub(offset)
@@ -182,8 +190,8 @@ mod test {
     fn sin_cos_random() {
         let pi_over_2 = u16::MAX / 4;
         let raw_angle = u16::MAX / 8; // ~45°
-        let angle = Angle::<Electrical>::new_raw(raw_angle);
-        let complementary = Angle::<Electrical>::new_raw(pi_over_2.wrapping_sub(raw_angle));
+        let angle = Angle::<Electrical>::from_raw(raw_angle);
+        let complementary = Angle::<Electrical>::from_raw(pi_over_2.wrapping_sub(raw_angle));
 
         let sin_val = angle.sin();
         let cos_comp = complementary.cos();
@@ -199,7 +207,7 @@ mod test {
     #[test]
     fn sin_cos_safety() {
         for raw_angle in (0..=u16::MAX).step_by(4096) {
-            let a = Angle::<Electrical>::new_raw(raw_angle);
+            let a = Angle::<Electrical>::from_raw(raw_angle);
             let _ = a.cos();
             let _ = a.sin();
         }
@@ -218,7 +226,7 @@ mod test {
         ];
 
         for (raw_mech, offset, pole_pairs, expected) in cases {
-            let mechanical = Angle::<Mechanical>::new_raw(raw_mech);
+            let mechanical = Angle::<Mechanical>::from_raw(raw_mech);
             let electrical = Angle::<Electrical>::from(&mechanical, offset, pole_pairs);
             assert_eq!(
                 electrical.raw_angle, expected,

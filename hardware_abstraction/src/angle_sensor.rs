@@ -1,12 +1,6 @@
-use shared::units::Angle;
-use shared::units::angle::AngleType;
+use shared::units::angle::AngleAny;
 
-pub trait AngleSensor
-where
-    Self::AngleType: AngleType,
-{
-    type Error;
-    type AngleType;
-
-    async fn read_angle_u16(&mut self) -> Result<Angle<Self::AngleType>, Self::Error>;
+pub trait AngleReader {
+    type Error: core::fmt::Debug;
+    async fn read_angle(&mut self) -> Result<AngleAny, Self::Error>;
 }
