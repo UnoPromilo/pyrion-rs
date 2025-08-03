@@ -17,7 +17,7 @@ bind_interrupts!(struct Irqs {
 
 pub struct ThreePhaseCurrentSensor<'a, 'b, Dma, Channel>
 where
-    Dma: Peripheral<P = Channel>,
+    Dma: Peripheral<P=Channel>,
     Channel: dma::Channel,
 {
     adc: Adc<'a, Async>,
@@ -29,15 +29,15 @@ where
 
 impl<'a, 'p, Dma, Channel> ThreePhaseCurrentSensor<'a, 'p, Dma, Channel>
 where
-    Dma: Peripheral<P = Channel>,
+    Dma: Peripheral<P=Channel>,
     Channel: dma::Channel,
 {
     pub fn new(
         adc: Adc<'a, Async>,
         dma: Dma,
-        pin_a: impl Peripheral<P = impl AdcPin + 'p> + 'p,
-        pin_b: impl Peripheral<P = impl AdcPin + 'p> + 'p,
-        pin_c: impl Peripheral<P = impl AdcPin + 'p> + 'p,
+        pin_a: impl Peripheral<P=impl AdcPin + 'p> + 'p,
+        pin_b: impl Peripheral<P=impl AdcPin + 'p> + 'p,
+        pin_c: impl Peripheral<P=impl AdcPin + 'p> + 'p,
         config: CurrentMeasurementConfig,
     ) -> Self {
         let conversion_constants =
@@ -58,7 +58,7 @@ where
 
 impl<DMA, Channel> CurrentReader for ThreePhaseCurrentSensor<'_, '_, DMA, Channel>
 where
-    DMA: Peripheral<P = Channel>,
+    DMA: Peripheral<P=Channel>,
     Channel: dma::Channel,
 {
     type Error = adc::Error;
@@ -76,7 +76,12 @@ where
 }
 
 #[embassy_executor::task]
-pub async fn update_current_dma_task(motor: &'static Motor, config: CurrentConfig) {
+pub async fn update_current_dma_task(motor: &'static Motor, config: Option<CurrentConfig>) {
+    let config = match config {
+        Some(c) => c,
+        None => return,
+    };
+
     let adc = Adc::new(config.adc, Irqs, adc::Config::default());
     info!("Initializing ADC...");
     let mut sensor = ThreePhaseCurrentSensor::new(
