@@ -1,5 +1,5 @@
 use crate::config::UartConfig;
-use defmt::{Format, info, warn};
+use defmt::{info, warn};
 use embassy_rp::uart::Uart;
 use embassy_rp::{bind_interrupts, peripherals, uart};
 use foc::Motor;
@@ -21,7 +21,7 @@ pub async fn read_from_serial_task(motor: &'static Motor, hardware_config: Optio
 
     let uart_config = uart::Config::default();
     let mut uart = Uart::new(
-        hardware_config.uart0,
+        hardware_config.uart,
         hardware_config.tx,
         hardware_config.rx,
         Irqs,
@@ -52,8 +52,8 @@ pub async fn read_from_serial_task(motor: &'static Motor, hardware_config: Optio
     }
 }
 
-async fn read_with_echo_to_break<'u, 'b, T: uart::Instance>(
-    uart: &mut Uart<'u, T, uart::Async>,
+async fn read_with_echo_to_break<'u, 'b>(
+    uart: &mut Uart<'u, uart::Async>,
     buffer: &'b mut [u8],
 ) -> Result<usize, uart::ReadToBreakError> {
     let mut len = 0;

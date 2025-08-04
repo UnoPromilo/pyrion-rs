@@ -2,7 +2,7 @@ use crate::config::{CurrentConfig, CurrentMeasurementConfig};
 use defmt::{info, warn};
 use embassy_rp::adc::{Adc, AdcPin, Async};
 use embassy_rp::gpio::Pull;
-use embassy_rp::{Peripheral, adc, bind_interrupts, dma};
+use embassy_rp::{Peri, adc, bind_interrupts, dma};
 use embassy_time::Timer;
 use foc::Motor;
 use foc::current::CurrentMeasurement;
@@ -15,29 +15,27 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
-pub struct ThreePhaseCurrentSensor<'a, 'b, Dma, Channel>
+pub struct ThreePhaseCurrentSensor<'a, 'b, Channel>
 where
-    Dma: Peripheral<P=Channel>,
     Channel: dma::Channel,
 {
     adc: Adc<'a, Async>,
-    dma: Dma,
+    dma: Peri<'a, Channel>,
     channels: [adc::Channel<'b>; 3],
     buffer: [u16; 3],
     conversion_constants: ConversionConstants,
 }
 
-impl<'a, 'p, Dma, Channel> ThreePhaseCurrentSensor<'a, 'p, Dma, Channel>
+impl<'a, 'p, Channel> ThreePhaseCurrentSensor<'a, 'p, Channel>
 where
-    Dma: Peripheral<P=Channel>,
     Channel: dma::Channel,
 {
     pub fn new(
         adc: Adc<'a, Async>,
-        dma: Dma,
-        pin_a: impl Peripheral<P=impl AdcPin + 'p> + 'p,
-        pin_b: impl Peripheral<P=impl AdcPin + 'p> + 'p,
-        pin_c: impl Peripheral<P=impl AdcPin + 'p> + 'p,
+        dma: Peri<'a, Channel>,
+        pin_a: Peri<'p, impl AdcPin>,
+        pin_b: Peri<'p, impl AdcPin>,
+        pin_c: Peri<'p, impl AdcPin>,
         config: CurrentMeasurementConfig,
     ) -> Self {
         let conversion_constants =
@@ -56,15 +54,14 @@ where
     }
 }
 
-impl<DMA, Channel> CurrentReader for ThreePhaseCurrentSensor<'_, '_, DMA, Channel>
+impl<Channel> CurrentReader for ThreePhaseCurrentSensor<'_, '_, Channel>
 where
-    DMA: Peripheral<P=Channel>,
     Channel: dma::Channel,
 {
     type Error = adc::Error;
     async fn read(&mut self) -> Result<Output, Self::Error> {
         self.adc
-            .read_many_multichannel(&mut self.channels, &mut self.buffer, 0, &mut self.dma)
+            .read_many_multichannel(&mut self.channels, &mut self.buffer, 0, self.dma.reborrow())
             .await?;
 
         Ok(Output::ThreePhases(
@@ -76,7 +73,10 @@ where
 }
 
 #[embassy_executor::task]
-pub async fn update_current_dma_task(motor: &'static Motor, hardware_config: Option<CurrentConfig>) {
+pub async fn update_current_dma_task(
+    motor: &'static Motor,
+    hardware_config: Option<CurrentConfig>,
+) {
     let hardware_config = match hardware_config {
         Some(c) => c,
         None => return,

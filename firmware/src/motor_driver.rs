@@ -1,7 +1,7 @@
 use crate::map::map;
 use defmt::info;
-use embassy_rp::pwm;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
+use embassy_rp::{Peri, pwm};
 use embedded_hal::pwm::SetDutyCycle;
 use hardware_abstraction::motor_driver;
 
@@ -19,9 +19,9 @@ pub struct MotorDriver<'d> {
 // TODO remove if still not used
 #[allow(dead_code)]
 fn new_pwm_synced<'a, T: Slice>(
-    slice: T,
-    high_pin: impl ChannelAPin<T> + 'a,
-    low_pin: impl ChannelBPin<T> + 'a,
+    slice: Peri<'a, T>,
+    high_pin: Peri<'a, impl ChannelAPin<T>>,
+    low_pin: Peri<'a, impl ChannelBPin<T>>,
 ) -> Pwm<'a> {
     let mut config = Config::default();
     config.invert_a = false;
@@ -69,6 +69,10 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
 
 impl MotorDriver<'_> {
     fn set_pwm_enabled(&self, enable: bool) {
+        self.a.set_counter(0);
+        self.b.set_counter(0);
+        self.c.set_counter(0);
+
         pwm::PwmBatch::set_enabled(enable, |batch| {
             batch.enable(&self.a);
             batch.enable(&self.b);

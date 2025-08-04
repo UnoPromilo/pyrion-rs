@@ -5,11 +5,11 @@ edition = "2024"
 
 [dependencies]
 embassy-embedded-hal = { version = "0.4.0", features = ["defmt"] }
-embassy-executor = { version = "0.7.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
+embassy-executor = { version = "0.8.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embedded-hal-async = { version = "1.0.0", features = ["defmt-03"] }
 embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
 embedded-io-async = { version = "0.6.1", features = ["defmt-03"] }
-embassy-rp = { version = "0.4.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
+embassy-rp = { version = "0.7.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
 embassy-sync = { version = "0.7.0", features = ["defmt"] }
 embassy-time = { version = "0.4.0", features = ["defmt", "defmt-timestamp-uptime"] }
 

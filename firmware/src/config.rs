@@ -1,3 +1,4 @@
+use embassy_rp::Peri;
 use embassy_rp::peripherals::*;
 use shared::units::{Resistance, Voltage};
 
@@ -10,25 +11,25 @@ pub struct HardwareConfig {
 }
 
 pub struct MotorConfig {
-    pub a_slice: PWM_SLICE0,
-    pub a_high: PIN_2,
-    pub a_low: PIN_3,
+    pub a_slice: Peri<'static, PWM_SLICE0>,
+    pub a_high: Peri<'static, PIN_2>,
+    pub a_low: Peri<'static, PIN_3>,
 
-    pub b_slice: PWM_SLICE1,
-    pub b_high: PIN_4,
-    pub b_low: PIN_5,
+    pub b_slice: Peri<'static, PWM_SLICE1>,
+    pub b_high: Peri<'static, PIN_4>,
+    pub b_low: Peri<'static, PIN_5>,
 
-    pub c_slice: PWM_SLICE2,
-    pub c_high: PIN_6,
-    pub c_low: PIN_7,
+    pub c_slice: Peri<'static, PWM_SLICE2>,
+    pub c_high: Peri<'static, PIN_6>,
+    pub c_low: Peri<'static, PIN_7>,
 }
 
 pub struct CurrentConfig {
-    pub adc: ADC,
-    pub dma: DMA_CH2,
-    pub phase_a: PIN_26,
-    pub phase_b: PIN_27,
-    pub phase_c: PIN_28,
+    pub adc: Peri<'static, ADC>,
+    pub dma: Peri<'static, DMA_CH2>,
+    pub phase_a: Peri<'static, PIN_26>,
+    pub phase_b: Peri<'static, PIN_27>,
+    pub phase_c: Peri<'static, PIN_28>,
     pub current_measurement_config: CurrentMeasurementConfig,
 }
 
@@ -39,9 +40,9 @@ pub struct CurrentMeasurementConfig {
 }
 
 pub struct I2cConfig {
-    pub i2c: I2C0,
-    pub sda: PIN_16,
-    pub scl: PIN_17,
+    pub i2c: Peri<'static, I2C0>,
+    pub sda: Peri<'static, PIN_16>,
+    pub scl: Peri<'static, PIN_17>,
 }
 
 pub enum AngleSensorConfig {
@@ -51,11 +52,11 @@ pub enum AngleSensorConfig {
 }
 
 pub struct UartConfig {
-    pub uart0: UART0,
-    pub tx: PIN_0,
-    pub rx: PIN_1,
-    pub tx_dma: DMA_CH0,
-    pub rx_dma: DMA_CH1,
+    pub uart: Peri<'static, UART0>,
+    pub tx: Peri<'static, PIN_0>,
+    pub rx: Peri<'static, PIN_1>,
+    pub tx_dma: Peri<'static, DMA_CH0>,
+    pub rx_dma: Peri<'static, DMA_CH1>,
 }
 
 impl HardwareConfig {
@@ -92,7 +93,7 @@ impl HardwareConfig {
             }),
             angle_sensor: AngleSensorConfig::As5600,
             uart: Some(UartConfig {
-                uart0: p.UART0,
+                uart: p.UART0,
                 tx: p.PIN_0,
                 rx: p.PIN_1,
                 tx_dma: p.DMA_CH0,
