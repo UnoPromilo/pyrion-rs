@@ -1,0 +1,10 @@
+[package]
+name = "interface"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+heapless = { version = "0.8.0", features = ["defmt-03"] }
+error_set = { version = "0.8.5", features = ["defmt"] }
+defmt = "1.0.1"
+foc = { path = "../foc" }

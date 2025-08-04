@@ -26,5 +26,6 @@ as5600 = { path = "../as5600" }
 hardware-abstraction = { path = "../hardware_abstraction" }
 foc = { path = "../foc" }
 shared = { path = "../shared" }
+interface = { path = "../interface" }
 
 

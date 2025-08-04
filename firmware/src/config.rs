@@ -1,11 +1,12 @@
 use embassy_rp::peripherals::*;
 use shared::units::{Resistance, Voltage};
 
-pub struct PhysicalConfig {
+pub struct HardwareConfig {
     pub motor_config: MotorConfig,
     pub current: Option<CurrentConfig>,
     pub i2c: Option<I2cConfig>,
     pub angle_sensor: AngleSensorConfig,
+    pub uart: Option<UartConfig>,
 }
 
 pub struct MotorConfig {
@@ -24,7 +25,7 @@ pub struct MotorConfig {
 
 pub struct CurrentConfig {
     pub adc: ADC,
-    pub dma: DMA_CH0,
+    pub dma: DMA_CH2,
     pub phase_a: PIN_26,
     pub phase_b: PIN_27,
     pub phase_c: PIN_28,
@@ -49,7 +50,15 @@ pub enum AngleSensorConfig {
     As5600,
 }
 
-impl PhysicalConfig {
+pub struct UartConfig {
+    pub uart0: UART0,
+    pub tx: PIN_0,
+    pub rx: PIN_1,
+    pub tx_dma: DMA_CH0,
+    pub rx_dma: DMA_CH1,
+}
+
+impl HardwareConfig {
     pub fn rp2040() -> Self {
         let p = embassy_rp::init(Default::default());
         Self {
@@ -66,7 +75,7 @@ impl PhysicalConfig {
             },
             current: Some(CurrentConfig {
                 adc: p.ADC,
-                dma: p.DMA_CH0,
+                dma: p.DMA_CH2,
                 phase_a: p.PIN_26,
                 phase_b: p.PIN_27,
                 phase_c: p.PIN_28,
@@ -82,6 +91,13 @@ impl PhysicalConfig {
                 sda: p.PIN_16,
             }),
             angle_sensor: AngleSensorConfig::As5600,
+            uart: Some(UartConfig {
+                uart0: p.UART0,
+                tx: p.PIN_0,
+                rx: p.PIN_1,
+                tx_dma: p.DMA_CH0,
+                rx_dma: p.DMA_CH1,
+            }),
         }
     }
 }

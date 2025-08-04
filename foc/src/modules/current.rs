@@ -26,7 +26,7 @@ impl CurrentMeasurement for Motor {
                 PhaseCurrent { a, b, c }
             }
         };
-        let mut power = self.power.lock().await;
+        let mut power = self.current.lock().await;
         *power = Some(phase_current);
         Ok(())
     }

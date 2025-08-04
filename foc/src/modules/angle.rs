@@ -21,7 +21,7 @@ impl AngleMeasurement for Motor {
             AngleAny::Mechanical(value) => Angle::<Electrical>::from(&value, 0, 1),
         };
 
-        let mut shaft_data = self.angle.lock().await;
+        let mut shaft_data = self.shaft.lock().await;
         *shaft_data = Some(ShaftData {
             angle,
             electrical_angle,

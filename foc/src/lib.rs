@@ -7,4 +7,4 @@ mod modules;
 mod state;
 
 pub use modules::*;
-pub use state::Motor;
+pub use state::{Motor, MotorFrozen};

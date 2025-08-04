@@ -76,21 +76,21 @@ where
 }
 
 #[embassy_executor::task]
-pub async fn update_current_dma_task(motor: &'static Motor, config: Option<CurrentConfig>) {
-    let config = match config {
+pub async fn update_current_dma_task(motor: &'static Motor, hardware_config: Option<CurrentConfig>) {
+    let hardware_config = match hardware_config {
         Some(c) => c,
         None => return,
     };
 
-    let adc = Adc::new(config.adc, Irqs, adc::Config::default());
+    let adc = Adc::new(hardware_config.adc, Irqs, adc::Config::default());
     info!("Initializing ADC...");
     let mut sensor = ThreePhaseCurrentSensor::new(
         adc,
-        config.dma,
-        config.phase_a,
-        config.phase_b,
-        config.phase_c,
-        config.current_measurement_config,
+        hardware_config.dma,
+        hardware_config.phase_a,
+        hardware_config.phase_b,
+        hardware_config.phase_c,
+        hardware_config.current_measurement_config,
     );
 
     loop {

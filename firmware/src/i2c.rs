@@ -55,13 +55,13 @@ pub fn init_i2c(physical_config: Option<I2cConfig>) -> &'static mut I2c {
     }
 }
 
-fn init_i2c_some(physical_config: I2cConfig) -> &'static mut I2c {
+fn init_i2c_some(hardware_config: I2cConfig) -> &'static mut I2c {
     let mut i2c_config = i2c::Config::default();
     i2c_config.frequency = 1_000_000;
     let i2c = i2c::I2c::new_async(
-        physical_config.i2c,
-        physical_config.scl,
-        physical_config.sda,
+        hardware_config.i2c,
+        hardware_config.scl,
+        hardware_config.sda,
         Irqs,
         i2c_config,
     );

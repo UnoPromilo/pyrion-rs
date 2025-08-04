@@ -135,10 +135,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "command-parser"
-version = "0.1.0"
-
-[[package]]
 name = "cortex-m"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -618,6 +614,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "err_trail"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf171eed0f19d57286fabcc6634d5c85b1054921f531a44c962225bbb06190b4"
+dependencies = [
+ "defmt 0.3.100",
+]
+
+[[package]]
+name = "error_set"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a5cfac9e0befd56d4a6f7ffdad3558f798d1fc005dfaaa99ed5202efd7abec6"
+dependencies = [
+ "defmt 0.3.100",
+ "err_trail",
+ "error_set_impl",
+]
+
+[[package]]
+name = "error_set_impl"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4937429fd4e1421897226f4337c9e1a4c4206f886828e51dea621cbdcb9fd38"
+dependencies = [
+ "indices",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn",
+]
+
+[[package]]
 name = "firmware"
 version = "0.1.0"
 dependencies = [
@@ -637,6 +666,7 @@ dependencies = [
  "embedded-io-async",
  "foc",
  "hardware-abstraction",
+ "interface",
  "panic-probe",
  "portable-atomic",
  "shared",
@@ -758,6 +788,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
+ "defmt 0.3.100",
  "hash32",
  "stable_deref_trait",
 ]
@@ -776,6 +807,22 @@ checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
  "hashbrown",
+]
+
+[[package]]
+name = "indices"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e125c680c3871dc195cfd3ff94a877a78f31d5e9c1a3a62cce82689ece14bf7"
+
+[[package]]
+name = "interface"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "error_set",
+ "foc",
+ "heapless",
 ]
 
 [[package]]

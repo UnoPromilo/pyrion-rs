@@ -21,7 +21,7 @@ pub struct Angle<T: AngleType> {
     _kind: PhantomData<T>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Format)]
 pub enum AngleAny {
     Electrical(Angle<Electrical>),
     Mechanical(Angle<Mechanical>),
