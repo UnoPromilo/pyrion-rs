@@ -18,7 +18,7 @@ mod config;
 mod current_sensor;
 mod i2c;
 mod map;
-mod rp_motor_driver;
+mod motor_driver;
 
 bind_interrupts!(struct Irqs {
 

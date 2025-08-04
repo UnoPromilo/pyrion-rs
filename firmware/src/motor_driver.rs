@@ -18,7 +18,7 @@ pub struct MotorDriver<'d> {
 
 // TODO remove if still not used
 #[allow(dead_code)]
-pub fn new_pwm_synced<'a, T: Slice>(
+fn new_pwm_synced<'a, T: Slice>(
     slice: T,
     high_pin: impl ChannelAPin<T> + 'a,
     low_pin: impl ChannelBPin<T> + 'a,
