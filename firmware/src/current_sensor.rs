@@ -109,5 +109,7 @@ async fn update_current_dma_run_until_error<R: CurrentReader>(
 ) -> Result<(), R::Error> {
     loop {
         motor.update_current(sensor).await?;
+        // Run as often as possible but allow other tasks to execute too
+        embassy_futures::yield_now().await;
     }
 }

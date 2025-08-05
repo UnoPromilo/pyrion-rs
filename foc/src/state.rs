@@ -19,6 +19,10 @@ pub struct ShaftData {
     pub measure_time: Instant,
 }
 
+pub enum MotorState {
+    Idle,
+}
+
 #[derive(Debug)]
 pub struct Motor {
     pub current: Mutex<NoopRawMutex, Option<PhaseCurrent>>,

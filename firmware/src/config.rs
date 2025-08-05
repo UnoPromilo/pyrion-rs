@@ -3,7 +3,7 @@ use embassy_rp::peripherals::*;
 use shared::units::{Resistance, Voltage};
 
 pub struct HardwareConfig {
-    pub motor_config: MotorConfig,
+    pub motor: MotorConfig,
     pub current: Option<CurrentConfig>,
     pub i2c: Option<I2cConfig>,
     pub angle_sensor: AngleSensorConfig,
@@ -11,15 +11,15 @@ pub struct HardwareConfig {
 }
 
 pub struct MotorConfig {
-    pub a_slice: Peri<'static, PWM_SLICE0>,
+    pub a_slice: Peri<'static, PWM_SLICE1>,
     pub a_high: Peri<'static, PIN_2>,
     pub a_low: Peri<'static, PIN_3>,
 
-    pub b_slice: Peri<'static, PWM_SLICE1>,
+    pub b_slice: Peri<'static, PWM_SLICE2>,
     pub b_high: Peri<'static, PIN_4>,
     pub b_low: Peri<'static, PIN_5>,
 
-    pub c_slice: Peri<'static, PWM_SLICE2>,
+    pub c_slice: Peri<'static, PWM_SLICE3>,
     pub c_high: Peri<'static, PIN_6>,
     pub c_low: Peri<'static, PIN_7>,
 }
@@ -63,14 +63,14 @@ impl HardwareConfig {
     pub fn rp2040() -> Self {
         let p = embassy_rp::init(Default::default());
         Self {
-            motor_config: MotorConfig {
-                a_slice: p.PWM_SLICE0,
+            motor: MotorConfig {
+                a_slice: p.PWM_SLICE1,
                 a_high: p.PIN_2,
                 a_low: p.PIN_3,
-                b_slice: p.PWM_SLICE1,
+                b_slice: p.PWM_SLICE2,
                 b_high: p.PIN_4,
                 b_low: p.PIN_5,
-                c_slice: p.PWM_SLICE2,
+                c_slice: p.PWM_SLICE3,
                 c_high: p.PIN_6,
                 c_low: p.PIN_7,
             },
