@@ -9,7 +9,7 @@ use foc::current::CurrentMeasurement;
 use foc::functions::adc_conversion::{
     ConversionConstants, calculate_scaling_constants, from_adc_to_current,
 };
-use hardware_abstraction::current_sensor::{CurrentReader, Output};
+use hardware_abstraction::current_sensor::{CurrentReader, Output, RawOutput};
 
 bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
@@ -23,7 +23,9 @@ where
     dma: Peri<'a, Channel>,
     channels: [adc::Channel<'b>; 3],
     buffer: [u16; 3],
-    conversion_constants: ConversionConstants,
+    conversion_constants_a: ConversionConstants,
+    conversion_constants_b: ConversionConstants,
+    conversion_constants_c: ConversionConstants,
 }
 
 impl<'a, 'p, Channel> ThreePhaseCurrentSensor<'a, 'p, Channel>
@@ -49,7 +51,9 @@ where
                 adc::Channel::new_pin(pin_c, Pull::None),
             ],
             buffer: [0; 3],
-            conversion_constants,
+            conversion_constants_a: conversion_constants,
+            conversion_constants_b: conversion_constants,
+            conversion_constants_c: conversion_constants,
         }
     }
 }
@@ -65,10 +69,28 @@ where
             .await?;
 
         Ok(Output::ThreePhases(
-            from_adc_to_current(self.buffer[0], &self.conversion_constants),
-            from_adc_to_current(self.buffer[1], &self.conversion_constants),
-            from_adc_to_current(self.buffer[2], &self.conversion_constants),
+            from_adc_to_current(self.buffer[0], &self.conversion_constants_a),
+            from_adc_to_current(self.buffer[1], &self.conversion_constants_b),
+            from_adc_to_current(self.buffer[2], &self.conversion_constants_c),
         ))
+    }
+
+    async fn read_raw(&mut self) -> Result<RawOutput, Self::Error> {
+        self.adc
+            .read_many_multichannel(&mut self.channels, &mut self.buffer, 0, self.dma.reborrow())
+            .await?;
+
+        Ok(RawOutput::ThreePhases(
+            self.buffer[0],
+            self.buffer[1],
+            self.buffer[2],
+        ))
+    }
+
+    async fn calibrate_current(&mut self, zero_a: u16, zero_b: u16, zero_c: u16) {
+        self.conversion_constants_a.recalculate_mid_value(zero_a);
+        self.conversion_constants_b.recalculate_mid_value(zero_b);
+        self.conversion_constants_c.recalculate_mid_value(zero_c);
     }
 }
 

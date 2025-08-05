@@ -1,6 +1,6 @@
 use crate::config::MotorConfig;
 use crate::map::map;
-use defmt::info;
+use defmt::debug;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embassy_rp::{Peri, pwm};
 use embedded_hal::pwm::SetDutyCycle;
@@ -54,8 +54,12 @@ impl<'d> MotorDriver<'d> {
 
 impl motor_driver::MotorDriver for MotorDriver<'_> {
     fn enable_synced(&mut self) {
+        let config = default_config();
+        self.a.set_config(&config);
+        self.b.set_config(&config);
+        self.c.set_config(&config);
         self.set_pwm_enabled(true);
-        info!("Motor driver enabled");
+        debug!("Motor driver enabled");
     }
 
     fn enable_phase_a(&mut self) {
@@ -63,6 +67,7 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
         config.enable = true;
         self.a.set_counter(0);
         self.a.set_config(&config);
+        debug!("Motor driver enabled (phase A)");
     }
 
     fn enable_phase_b(&mut self) {
@@ -70,6 +75,7 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
         config.enable = true;
         self.b.set_counter(0);
         self.b.set_config(&config);
+        debug!("Motor driver enabled (phase B)");
     }
 
     fn enable_phase_c(&mut self) {
@@ -77,6 +83,7 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
         config.enable = true;
         self.c.set_counter(0);
         self.c.set_config(&config);
+        debug!("Motor driver enabled (phase C)");
     }
 
     fn set_voltages(&mut self, ua: i16, ub: i16, uc: i16) {
@@ -85,10 +92,32 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
         Self::set_voltage(&mut self.c, uc);
     }
 
+    fn set_voltage_a(&mut self, ua: i16) {
+        Self::set_voltage(&mut self.a, ua);
+    }
+
+    fn set_voltage_b(&mut self, ub: i16) {
+        Self::set_voltage(&mut self.b, ub);
+    }
+
+    fn set_voltage_c(&mut self, uc: i16) {
+        Self::set_voltage(&mut self.c, uc);
+    }
+
     fn disable(&mut self) {
+
+        let mut config = default_config();
+        config.invert_b = false;
+        self.a.set_config(&config);
+        self.b.set_config(&config);
+        self.c.set_config(&config);
+
         self.set_pwm_enabled(false);
-        self.set_voltages(0, 0, 0);
-        info!("Motor driver disabled");
+        self.a.phase_advance();
+        self.b.phase_advance();
+        self.c.phase_advance();
+
+        debug!("Motor driver disabled");
     }
 }
 
@@ -116,20 +145,20 @@ impl MotorDriver<'_> {
         let high_duty_cycle = (duty_cycle - HALF_DEAD_TIME).max(0) as u16;
         let low_duty_cycle = (duty_cycle + HALF_DEAD_TIME).min(PWM_PERIOD) as u16;
 
-        high.expect("High channel is mandatory")
-            .set_duty_cycle(high_duty_cycle)
-            .unwrap();
-        low.expect("Low channel is mandatory")
-            .set_duty_cycle(low_duty_cycle)
-            .unwrap();
+        if let Some(mut h) = high {
+            h.set_duty_cycle(high_duty_cycle).unwrap();
+        }
+        if let Some(mut l) = low {
+            l.set_duty_cycle(low_duty_cycle).unwrap();
+        }
     }
 }
 
 #[embassy_executor::task]
 pub async fn drive_motor_task(motor: &'static Motor, hardware_config: MotorConfig) {
-    let motor_driver = MotorDriver::new(hardware_config);
+    let mut motor_driver = MotorDriver::new(hardware_config);
     loop {
-        // Run as often as possible but allow other tasks to execute too
+        foc::state_machine::on_tick(motor, &mut motor_driver).await;
         embassy_futures::yield_now().await;
     }
 }

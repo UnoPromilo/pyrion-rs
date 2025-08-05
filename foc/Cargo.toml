@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-micromath = "2.1.0"
 defmt = "1.0.1"
-hardware-abstraction = { path = "../hardware_abstraction" }
+embassy-futures = { version = "0.1.1", features = ["defmt"] }
 embassy-time = { version = "0.4.0", features = ["defmt"] }
 embassy-sync = "0.7.0"
+hardware-abstraction = { path = "../hardware_abstraction" }
 shared = { path = "../shared" }

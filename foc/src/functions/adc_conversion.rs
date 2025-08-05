@@ -3,7 +3,7 @@ use shared::units::{Current, Resistance, Voltage};
 
 const SHIFT: u8 = 32;
 
-#[derive(Debug, Format)]
+#[derive(Debug, Format, Clone, Copy)]
 pub struct ConversionConstants {
     adc_to_mv_scale: u64,
     gain_scale: u64,
@@ -34,6 +34,14 @@ pub fn from_adc_to_current(raw: u16, constants: &ConversionConstants) -> Current
     let v_diff_mv = v_mv_fp as i64 - constants.v_ref_mid_mv;
     let current_ma = (v_diff_mv * constants.gain_scale as i64) >> SHIFT;
     Current::from_milliamps(current_ma.clamp(i16::MIN as i64, i16::MAX as i64) as i16)
+}
+
+impl ConversionConstants {
+    pub fn recalculate_mid_value(&mut self, raw_zero: u16) {
+        let zero = (raw_zero as u64 * self.adc_to_mv_scale) >> SHIFT;
+        let difference = self.v_ref_mid_mv - zero as i64;
+        self.v_ref_mid_mv -= difference;
+    }
 }
 
 #[cfg(test)]
@@ -114,5 +122,20 @@ mod tests {
         // v_out = (0 * 3300 / 4095) - 1650 = -1650 mV
         // i = 1650 * 1000 / (10 * 40) = -825 mA
         assert_eq!(result, Current::from_milliamps(-825));
+    }
+
+    #[test]
+    fn test_recalculate_mid_value() {
+        let new_zero = 2000; // We have an offset -48 that we need to compensate
+        let mut constants = calculate_scaling_constants(
+            Voltage::from_millivolts(3300),
+            Resistance::from_milliohms(100),
+            20,
+        );
+        constants.recalculate_mid_value(new_zero);
+
+        // At new zero, v_out ≈ 0, so current should be ≈ 0
+        let result = from_adc_to_current(new_zero, &constants);
+        assert_eq!(result, Current::from_milliamps(0));
     }
 }
