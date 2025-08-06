@@ -3,7 +3,7 @@ use crate::state::{
     CalibratingCurrentSensorState::*, InitializationState::*, MotorState, MotorState::*,
     MotorStateSnapshot,
 };
-use defmt::debug;
+use defmt::info;
 use embassy_time::Duration;
 use hardware_abstraction::motor_driver::MotorDriver;
 
@@ -45,26 +45,26 @@ fn apply_state_transition(new_state: MotorState, driver: &mut impl MotorDriver) 
         Uninitialized => {}
         Initializing(CalibratingCurrentSensor(phase)) => match phase {
             PhaseAPowered => {
-                debug!("Calibrating current sensor, phase A powered");
+                info!("Calibrating current sensor, phase A powered");
                 driver.disable();
                 driver.enable_phase_a();
                 driver.set_voltage_a(0);
             }
             PhaseBPowered => {
-                debug!("Calibrating current sensor, phase B powered");
+                info!("Calibrating current sensor, phase B powered");
                 driver.disable();
                 driver.enable_phase_b();
                 driver.set_voltage_b(0);
             }
             PhaseCPowered => {
-                debug!("Calibrating current sensor, phase C powered");
+                info!("Calibrating current sensor, phase C powered");
                 driver.disable();
                 driver.enable_phase_c();
                 driver.set_voltage_c(0);
             }
         },
         Idle => {
-            debug!("Idle");
+            info!("Idle");
             driver.disable();
         }
     }
