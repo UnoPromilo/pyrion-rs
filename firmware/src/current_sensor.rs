@@ -14,13 +14,13 @@ bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;
 });
 
-pub struct ThreePhaseCurrentSensor<'a, 'b, Channel>
+pub struct ThreePhaseCurrentSensor<'a, 'c, Channel>
 where
     Channel: dma::Channel,
 {
     adc: Adc<'a, Async>,
-    dma: Peri<'a, Channel>,
-    channels: [adc::Channel<'b>; 3],
+    dma: Peri<'c, Channel>,
+    channels: [adc::Channel<'c>; 3],
     buffer: [u16; 3],
     conversion_constants_a: ConversionConstants,
     conversion_constants_b: ConversionConstants,
@@ -33,7 +33,7 @@ where
 {
     pub fn new(
         adc: Adc<'a, Async>,
-        dma: Peri<'a, Channel>,
+        dma: Peri<'p, Channel>,
         pin_a: Peri<'p, impl AdcPin>,
         pin_b: Peri<'p, impl AdcPin>,
         pin_c: Peri<'p, impl AdcPin>,
@@ -63,9 +63,7 @@ where
 {
     type Error = adc::Error;
     async fn read(&mut self) -> Result<Output, Self::Error> {
-        self.adc
-            .read_many_multichannel(&mut self.channels, &mut self.buffer, 0, self.dma.reborrow())
-            .await?;
+        self.update_buffer().await?;
 
         Ok(Output::ThreePhases(
             from_adc_to_current(self.buffer[0], &self.conversion_constants_a),
@@ -75,9 +73,7 @@ where
     }
 
     async fn read_raw(&mut self) -> Result<RawOutput, Self::Error> {
-        self.adc
-            .read_many_multichannel(&mut self.channels, &mut self.buffer, 0, self.dma.reborrow())
-            .await?;
+        self.update_buffer().await?;
 
         Ok(RawOutput::ThreePhases(
             self.buffer[0],
@@ -90,6 +86,18 @@ where
         self.conversion_constants_a.recalculate_mid_value(zero_a);
         self.conversion_constants_b.recalculate_mid_value(zero_b);
         self.conversion_constants_c.recalculate_mid_value(zero_c);
+    }
+}
+
+impl<Channel> ThreePhaseCurrentSensor<'_, '_, Channel>
+where
+    Channel: dma::Channel,
+{
+    async fn update_buffer(&mut self) -> Result<(), adc::Error> {
+        self.adc
+            .read_many_multichannel(&mut self.channels, &mut self.buffer, 0, self.dma.reborrow())
+            .await?;
+        Ok(())
     }
 }
 

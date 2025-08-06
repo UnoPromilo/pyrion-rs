@@ -3,6 +3,7 @@ use crate::state::{
     CalibratingCurrentSensorState, InitializationState::CalibratingCurrentSensor,
     MotorState::Initializing, PhaseCurrent,
 };
+use defmt::debug;
 
 use hardware_abstraction::current_sensor;
 use hardware_abstraction::current_sensor::{CurrentReader, RawOutput};
@@ -30,14 +31,20 @@ impl Motor {
 
             loop {
                 let state = { self.state.lock().await.state };
+                let mut sample_count = 0u32;
                 match state {
                     Initializing(CalibratingCurrentSensor(cal_state)) => {
                         let raw_output = current_reader.read_raw().await?;
                         calibration_accumulator.update(cal_state, raw_output);
+                        sample_count += 1;
                         embassy_futures::yield_now().await;
                     }
                     _ => break,
                 }
+                debug!(
+                    "Current sensor calibration was based on {} samples",
+                    sample_count
+                );
             }
 
             let (a, b, c) = calibration_accumulator.finalize();
