@@ -13,18 +13,18 @@ pub struct PhaseCurrent {
 }
 
 #[derive(Debug, Format, Clone, Copy)]
-pub struct PhaseCurrentCalibrationData {
-    pub offset_zero_a: i16,
-    pub offset_zero_b: i16,
-    pub offset_zero_c: i16,
+pub struct PhaseCurrentOffset {
+    pub offset_a: i16,
+    pub offset_b: i16,
+    pub offset_c: i16,
 }
 
-impl PhaseCurrentCalibrationData {
+impl PhaseCurrentOffset {
     fn zero() -> Self {
         Self {
-            offset_zero_a: 0,
-            offset_zero_b: 0,
-            offset_zero_c: 0,
+            offset_a: 0,
+            offset_b: 0,
+            offset_c: 0,
         }
     }
 }
@@ -37,12 +37,12 @@ pub struct ShaftData {
 }
 
 #[derive(Debug)]
-pub struct MotorStateEnvelope {
+pub struct MotorStateSnapshot {
     pub state: MotorState,
     pub state_set_at: Instant,
 }
 
-impl MotorStateEnvelope {
+impl MotorStateSnapshot {
     pub fn new(state: MotorState) -> Self {
         Self {
             state,
@@ -53,7 +53,7 @@ impl MotorStateEnvelope {
 
 #[derive(Debug, Copy, Clone)]
 pub enum MotorState {
-    NotInitialized,
+    Uninitialized,
     Initializing(InitializationState),
     Idle,
 }
@@ -73,13 +73,13 @@ pub enum CalibratingCurrentSensorState {
 #[derive(Debug)]
 pub struct Motor {
     pub current: Mutex<NoopRawMutex, Option<PhaseCurrent>>,
-    pub current_calibration_data: Mutex<NoopRawMutex, PhaseCurrentCalibrationData>,
+    pub current_calibration_data: Mutex<NoopRawMutex, PhaseCurrentOffset>,
     pub shaft: Mutex<NoopRawMutex, Option<ShaftData>>,
-    pub state: Mutex<NoopRawMutex, MotorStateEnvelope>,
+    pub state: Mutex<NoopRawMutex, MotorStateSnapshot>,
 }
 
 #[derive(Debug, Format)]
-pub struct MotorFrozen {
+pub struct MotorSnapshot {
     pub current: Option<PhaseCurrent>,
     pub shaft: Option<ShaftData>,
 }
@@ -88,15 +88,14 @@ impl Motor {
     pub fn new() -> Self {
         Self {
             current: Mutex::new(None),
-            current_calibration_data: Mutex::new(PhaseCurrentCalibrationData::zero()),
+            current_calibration_data: Mutex::new(PhaseCurrentOffset::zero()),
             shaft: Mutex::new(None),
-            state: Mutex::new(MotorStateEnvelope::new(MotorState::NotInitialized)),
+            state: Mutex::new(MotorStateSnapshot::new(MotorState::Uninitialized)),
         }
     }
 
-    /// Returns frozen copy of the current state.
-    pub async fn freeze(&self) -> MotorFrozen {
-        MotorFrozen {
+    pub async fn snapshot(&self) -> MotorSnapshot {
+        MotorSnapshot {
             current: self.current.lock().await.clone(),
             shaft: self.shaft.lock().await.clone(),
         }

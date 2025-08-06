@@ -1,14 +1,11 @@
 use crate::Motor;
-use crate::state::{CalibratingCurrentSensorState, InitializationState, MotorState, PhaseCurrent};
+use crate::state::{
+    CalibratingCurrentSensorState, InitializationState::CalibratingCurrentSensor,
+    MotorState::Initializing, PhaseCurrent,
+};
+
 use hardware_abstraction::current_sensor;
 use hardware_abstraction::current_sensor::{CurrentReader, RawOutput};
-
-pub trait CurrentMeasurement {
-    async fn update_current<R: CurrentReader>(
-        &self,
-        current_reader: &mut R,
-    ) -> Result<(), R::Error>;
-}
 
 #[derive(Default)]
 struct ChannelAccumulator {
@@ -23,50 +20,53 @@ struct CalibrationAccumulator {
     c: ChannelAccumulator,
 }
 
-impl CurrentMeasurement for Motor {
-    async fn update_current<R: CurrentReader>(
+impl Motor {
+    pub async fn update_current<R: CurrentReader>(
         &self,
         current_reader: &mut R,
     ) -> Result<(), R::Error> {
-        let state = { self.state.lock().await.state };
-
-        if let MotorState::Initializing(InitializationState::CalibratingCurrentSensor(_)) = state {
+        if self.is_calibrating().await {
             let mut calibration_accumulator = CalibrationAccumulator::default();
-            while let MotorState::Initializing(InitializationState::CalibratingCurrentSensor(
-                cal_state,
-            )) = state
-            {
-                let raw_output = current_reader.read_raw().await?;
-                calibration_accumulator.update(cal_state, raw_output);
-                // Let's run other tasks between readings
-                embassy_futures::yield_now().await;
+
+            loop {
+                let state = { self.state.lock().await.state };
+                match state {
+                    Initializing(CalibratingCurrentSensor(cal_state)) => {
+                        let raw_output = current_reader.read_raw().await?;
+                        calibration_accumulator.update(cal_state, raw_output);
+                        embassy_futures::yield_now().await;
+                    }
+                    _ => break,
+                }
             }
-            let calibration_values = calibration_accumulator.finalize();
-            current_reader
-                .calibrate_current(
-                    calibration_values.0,
-                    calibration_values.1,
-                    calibration_values.2,
-                )
-                .await;
+
+            let (a, b, c) = calibration_accumulator.finalize();
+            current_reader.calibrate_current(a, b, c).await;
         }
 
-        let result = current_reader.read().await?;
-        let phase_current = match result {
-            current_sensor::Output::TwoPhases(a, b) => {
-                let c = -a - b;
-                PhaseCurrent { a, b, c }
-            }
-            current_sensor::Output::ThreePhases(a, b, c) => {
-                //TODO add logic about calculating third current if low duty cycle
-                PhaseCurrent { a, b, c }
-            }
-        };
-        {
-            let mut power = self.current.lock().await;
-            *power = Some(phase_current);
-        }
+        let output = current_reader.read().await?;
+        let phase_current = PhaseCurrent::from_output(output);
+
+        *self.current.lock().await = Some(phase_current);
+
         Ok(())
+    }
+
+    async fn is_calibrating(&self) -> bool {
+        matches!(
+            self.state.lock().await.state,
+            Initializing(CalibratingCurrentSensor(_))
+        )
+    }
+}
+
+impl PhaseCurrent {
+    fn from_output(output: current_sensor::Output) -> Self {
+        match output {
+            current_sensor::Output::TwoPhases(a, b) => Self { a, b, c: -a - b },
+            //TODO add logic about calculating third current if low duty cycle to improve accuracy
+            current_sensor::Output::ThreePhases(a, b, c) => Self { a, b, c },
+        }
     }
 }
 

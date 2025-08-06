@@ -1,5 +1,5 @@
 use defmt::Format;
-use foc::MotorFrozen;
+use foc::MotorSnapshot;
 
 #[derive(Format)]
 pub enum Command {
@@ -10,5 +10,5 @@ pub enum Command {
 #[derive(Format)]
 pub enum CommandResult {
     Echo,
-    State(MotorFrozen),
+    State(MotorSnapshot),
 }

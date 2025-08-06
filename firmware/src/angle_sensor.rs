@@ -5,7 +5,6 @@ use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_time::Timer;
 use embedded_hal_async::i2c;
 use foc::Motor;
-use foc::angle::AngleMeasurement;
 use hardware_abstraction::angle_sensor::AngleReader;
 use shared::units::Angle;
 use shared::units::angle::AngleAny;

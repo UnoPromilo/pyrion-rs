@@ -5,12 +5,9 @@ use hardware_abstraction::angle_sensor::AngleReader;
 use shared::units::angle::{AngleAny, Electrical};
 use shared::units::Angle;
 
-pub trait AngleMeasurement {
-    async fn update_angle<R: AngleReader>(&self, angle_reader: &mut R) -> Result<(), R::Error>;
-}
 
-impl AngleMeasurement for Motor {
-    async fn update_angle<R: AngleReader>(&self, angle_reader: &mut R) -> Result<(), R::Error> {
+impl Motor {
+    pub async fn update_angle<R: AngleReader>(&self, angle_reader: &mut R) -> Result<(), R::Error> {
         let angle = angle_reader.read_angle().await?;
 
         // TODO now before or after reading?

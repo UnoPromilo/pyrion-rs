@@ -1,91 +1,70 @@
 use crate::Motor;
 use crate::state::{
-    CalibratingCurrentSensorState, InitializationState, MotorState, MotorStateEnvelope,
+    CalibratingCurrentSensorState::*, InitializationState::*, MotorState, MotorState::*,
+    MotorStateSnapshot,
 };
 use defmt::debug;
 use embassy_time::Duration;
 use hardware_abstraction::motor_driver::MotorDriver;
 
-const INITIAL_DEAD_TIME: Duration = Duration::from_millis(500);
-const CURRENT_SENSOR_PHASE_CALIBRATION_TIME: Duration = Duration::from_millis(100);
-
 pub async fn on_tick(motor: &Motor, driver: &mut impl MotorDriver) {
-    let mut envelope = motor.state.lock().await;
-    let (state, set_at) = (envelope.state, envelope.state_set_at);
-    let duration_since_state_change = set_at.elapsed();
+    let mut state_snapshot = motor.state.lock().await;
+    let duration = state_snapshot.state_set_at.elapsed();
 
-    let mut update_state = |state: MotorState| {
-        update_state(state, driver);
-        *envelope = MotorStateEnvelope::new(state);
-    };
-
-    match state {
-        MotorState::NotInitialized => {
-            if duration_since_state_change > INITIAL_DEAD_TIME {
-                debug!("Starting current calibration");
-                update_state(MotorState::Initializing(
-                    InitializationState::CalibratingCurrentSensor(
-                        CalibratingCurrentSensorState::PhaseAPowered,
-                    ),
-                ));
-                debug!("Phase A powered");
-            }
-        }
-        MotorState::Initializing(state) => match state {
-            InitializationState::CalibratingCurrentSensor(state) => {
-                if duration_since_state_change > CURRENT_SENSOR_PHASE_CALIBRATION_TIME {
-                    match state {
-                        CalibratingCurrentSensorState::PhaseAPowered => {
-                            update_state(MotorState::Initializing(
-                                InitializationState::CalibratingCurrentSensor(
-                                    CalibratingCurrentSensorState::PhaseBPowered,
-                                ),
-                            ));
-                            debug!("Phase B powered");
-                        }
-                        CalibratingCurrentSensorState::PhaseBPowered => {
-                            update_state(MotorState::Initializing(
-                                InitializationState::CalibratingCurrentSensor(
-                                    CalibratingCurrentSensorState::PhaseCPowered,
-                                ),
-                            ));
-                            debug!("Phase C powered");
-                        }
-                        CalibratingCurrentSensorState::PhaseCPowered => {
-                            debug!("Current calibration finished");
-                            update_state(MotorState::Idle)
-                        }
-                    }
-                }
-            }
-        },
-        MotorState::Idle => {}
+    if let Some(next_state) = next_motor_state(state_snapshot.state, duration) {
+        apply_state_transition(next_state, driver);
+        *state_snapshot = MotorStateSnapshot::new(next_state);
     }
 }
 
-fn update_state(new_state: MotorState, driver: &mut impl MotorDriver) {
+fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState> {
+    const INITIAL_DEAD_TIME: Duration = Duration::from_millis(500);
+    const CURRENT_SENSOR_PHASE_CALIBRATION_TIME: Duration = Duration::from_millis(100);
+
+    match current {
+        Uninitialized if elapsed > INITIAL_DEAD_TIME => {
+            Some(Initializing(CalibratingCurrentSensor(PhaseAPowered)))
+        }
+        Uninitialized => None,
+        Initializing(CalibratingCurrentSensor(phase))
+            if elapsed > CURRENT_SENSOR_PHASE_CALIBRATION_TIME =>
+        {
+            match phase {
+                PhaseAPowered => Some(Initializing(CalibratingCurrentSensor(PhaseBPowered))),
+                PhaseBPowered => Some(Initializing(CalibratingCurrentSensor(PhaseCPowered))),
+                PhaseCPowered => Some(Idle),
+            }
+        }
+        Initializing(CalibratingCurrentSensor(_)) => None,
+        Idle => None,
+    }
+}
+
+fn apply_state_transition(new_state: MotorState, driver: &mut impl MotorDriver) {
     match new_state {
-        MotorState::NotInitialized => {}
-        MotorState::Initializing(state) => match state {
-            InitializationState::CalibratingCurrentSensor(state) => match state {
-                CalibratingCurrentSensorState::PhaseAPowered => {
-                    driver.disable();
-                    driver.enable_phase_a();
-                    driver.set_voltage_a(0);
-                }
-                CalibratingCurrentSensorState::PhaseBPowered => {
-                    driver.disable();
-                    driver.enable_phase_b();
-                    driver.set_voltage_b(0);
-                }
-                CalibratingCurrentSensorState::PhaseCPowered => {
-                    driver.disable();
-                    driver.enable_phase_c();
-                    driver.set_voltage_c(0);
-                }
-            },
+        Uninitialized => {}
+        Initializing(CalibratingCurrentSensor(phase)) => match phase {
+            PhaseAPowered => {
+                debug!("Calibrating current sensor, phase A powered");
+                driver.disable();
+                driver.enable_phase_a();
+                driver.set_voltage_a(0);
+            }
+            PhaseBPowered => {
+                debug!("Calibrating current sensor, phase B powered");
+                driver.disable();
+                driver.enable_phase_b();
+                driver.set_voltage_b(0);
+            }
+            PhaseCPowered => {
+                debug!("Calibrating current sensor, phase C powered");
+                driver.disable();
+                driver.enable_phase_c();
+                driver.set_voltage_c(0);
+            }
         },
-        MotorState::Idle => {
+        Idle => {
+            debug!("Idle");
             driver.disable();
         }
     }

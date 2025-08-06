@@ -10,7 +10,6 @@ pub struct ConversionConstants {
     v_ref_mid_mv: i64,
 }
 
-// TODO add calibration code for middle value
 pub fn calculate_scaling_constants(
     v_ref: Voltage,
     shunt_resistor: Resistance,

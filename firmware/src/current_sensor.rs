@@ -5,7 +5,6 @@ use embassy_rp::gpio::Pull;
 use embassy_rp::{Peri, adc, bind_interrupts, dma};
 use embassy_time::Timer;
 use foc::Motor;
-use foc::current::CurrentMeasurement;
 use foc::functions::adc_conversion::{
     ConversionConstants, calculate_scaling_constants, from_adc_to_current,
 };

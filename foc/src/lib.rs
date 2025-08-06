@@ -8,4 +8,4 @@ mod state;
 pub mod state_machine;
 
 pub use modules::*;
-pub use state::{Motor, MotorFrozen};
+pub use state::{Motor, MotorSnapshot};

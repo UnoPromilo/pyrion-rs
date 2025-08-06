@@ -14,5 +14,5 @@ fn handle_echo() -> CommandResult {
 }
 
 async fn handle_get_state(motor: &Motor) -> CommandResult {
-    CommandResult::State(motor.freeze().await)
+    CommandResult::State(motor.snapshot().await)
 }
