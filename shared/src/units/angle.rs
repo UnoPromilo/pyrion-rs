@@ -1,9 +1,9 @@
 use crate::units::Direction;
 use crate::units::cos_lut::COS_LUT;
 use core::marker::PhantomData;
-use core::num::ParseFloatError;
 use core::str::FromStr;
 use defmt::Format;
+use fixed::ParseFixedError;
 use fixed::types::{I1F15, U16F16};
 
 #[derive(Debug, Copy, Clone)]
@@ -106,22 +106,22 @@ impl<T: AngleType> FromStr for Angle<T> {
     type Err = ParseAngleError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let degrees_float = s.parse::<f32>()?;
-        if degrees_float < 0f32 || degrees_float >= 360f32 {
+        let degrees = U16F16::from_str(s)?;
+        if degrees < 0 || degrees >= 360 {
             return Err(ParseAngleError::OutOfRange);
         }
-        Ok(Self::from_degrees(U16F16::from_num(degrees_float as u16)))
+        Ok(Self::from_degrees(degrees))
     }
 }
 
 pub enum ParseAngleError {
-    ParseFloat(ParseFloatError),
+    ParseFixedError(ParseFixedError),
     OutOfRange,
 }
 
-impl From<ParseFloatError> for ParseAngleError {
-    fn from(value: ParseFloatError) -> Self {
-        ParseAngleError::ParseFloat(value)
+impl From<ParseFixedError> for ParseAngleError {
+    fn from(value: ParseFixedError) -> Self {
+        ParseAngleError::ParseFixedError(value)
     }
 }
 
