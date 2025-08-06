@@ -3,6 +3,7 @@ mod current;
 mod direction;
 mod resistance;
 mod voltage;
+mod velocity;
 
 mod cos_lut;
 
@@ -11,3 +12,4 @@ pub use current::Current;
 pub use direction::Direction;
 pub use resistance::Resistance;
 pub use voltage::Voltage;
+pub use velocity::Velocity;

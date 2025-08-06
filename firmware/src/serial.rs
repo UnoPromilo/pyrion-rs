@@ -63,7 +63,7 @@ async fn read_with_echo_to_break<'u, 'b>(
             .await
             .map_err(uart::ReadToBreakError::Other)?;
 
-        // stop if newline detected
+        // stop if a newline detected
         if buffer[len] == b'\n' || buffer[len] == b'\r' {
             break;
         }
@@ -90,7 +90,7 @@ async fn execute_command(
     let raw_command = RawCommand::serial(raw_command);
     let parsed = interface::serial::parse(&raw_command)?;
     let command = interface::serial::decode_command(&parsed)?;
-    let result = interface::execute_command(&command, motor).await;
+    let result = interface::execute_command(command, motor).await;
     info!("Received command result: {:?}", result);
     // TODO write to uart instead of defmt
     Ok(result)

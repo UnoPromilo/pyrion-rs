@@ -10,7 +10,7 @@ impl Resistance {
     }
 
     #[inline(always)]
-    pub fn as_milliohms(self) -> i16 {
+    pub fn as_milliohms(&self) -> i16 {
         self.0
     }
 }

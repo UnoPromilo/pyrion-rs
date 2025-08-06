@@ -1,5 +1,4 @@
 use crate::serial::errors::ParsingError;
-use core::slice::Iter;
 use heapless::Vec;
 
 pub struct CommandEnvelope<'a> {
@@ -8,13 +7,7 @@ pub struct CommandEnvelope<'a> {
 }
 
 pub struct ArgList<'a> {
-    items: Vec<Arg<'a>, 8>,
-}
-
-impl ArgList<'_> {
-    pub fn iter(&self) -> Iter<'_, Arg> {
-        self.items.iter()
-    }
+    pub items: Vec<Arg<'a>, 8>,
 }
 
 pub struct Arg<'a> {
@@ -91,7 +84,7 @@ fn is_value_expression_valid(raw_name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::serial::parser::{RawCommand, parse};
+    use crate::serial::parser::{parse, RawCommand};
     use alloc::{format, vec};
 
     #[test]

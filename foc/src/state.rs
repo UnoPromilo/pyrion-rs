@@ -2,8 +2,8 @@ use defmt::Format;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Instant;
-use shared::units::angle::{AngleAny, Electrical};
-use shared::units::{Angle, Current};
+use shared::units::angle::{AngleAny, Electrical, Mechanical};
+use shared::units::{Angle, Current, Velocity, Voltage};
 
 #[derive(Debug, Format, Clone, Copy)]
 pub struct PhaseCurrent {
@@ -13,30 +13,13 @@ pub struct PhaseCurrent {
 }
 
 #[derive(Debug, Format, Clone, Copy)]
-pub struct PhaseCurrentOffset {
-    pub offset_a: i16,
-    pub offset_b: i16,
-    pub offset_c: i16,
-}
-
-impl PhaseCurrentOffset {
-    fn zero() -> Self {
-        Self {
-            offset_a: 0,
-            offset_b: 0,
-            offset_c: 0,
-        }
-    }
-}
-
-#[derive(Debug, Format, Clone, Copy)]
 pub struct ShaftData {
     pub angle: AngleAny,
     pub electrical_angle: Angle<Electrical>,
     pub measure_time: Instant,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Format, Clone, Copy)]
 pub struct MotorStateSnapshot {
     pub state: MotorState,
     pub state_set_at: Instant,
@@ -51,46 +34,57 @@ impl MotorStateSnapshot {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Format, Clone, Copy)]
 pub enum MotorState {
     Uninitialized,
     Initializing(InitializationState),
     Idle,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Format, Clone, Copy)]
 pub enum InitializationState {
     CalibratingCurrentSensor(CalibratingCurrentSensorState),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Format, Clone, Copy)]
 pub enum CalibratingCurrentSensorState {
     PhaseAPowered,
     PhaseBPowered,
     PhaseCPowered,
 }
 
+#[derive(Debug, Format, Clone, Copy)]
+pub enum ControlCommand {
+    None,
+    Voltage(Voltage),
+    Torque(Current),
+    Velocity(Velocity),
+    Position(Angle<Mechanical>),
+}
+
 #[derive(Debug)]
 pub struct Motor {
     pub current: Mutex<NoopRawMutex, Option<PhaseCurrent>>,
-    pub current_calibration_data: Mutex<NoopRawMutex, PhaseCurrentOffset>,
     pub shaft: Mutex<NoopRawMutex, Option<ShaftData>>,
     pub state: Mutex<NoopRawMutex, MotorStateSnapshot>,
+    pub command: Mutex<NoopRawMutex, ControlCommand>,
 }
 
-#[derive(Debug, Format)]
+#[derive(Debug, Format, Clone, Copy)]
 pub struct MotorSnapshot {
     pub current: Option<PhaseCurrent>,
     pub shaft: Option<ShaftData>,
+    pub state: MotorStateSnapshot,
+    pub command: ControlCommand,
 }
 
 impl Motor {
     pub fn new() -> Self {
         Self {
             current: Mutex::new(None),
-            current_calibration_data: Mutex::new(PhaseCurrentOffset::zero()),
             shaft: Mutex::new(None),
             state: Mutex::new(MotorStateSnapshot::new(MotorState::Uninitialized)),
+            command: Mutex::new(ControlCommand::None),
         }
     }
 
@@ -98,6 +92,8 @@ impl Motor {
         MotorSnapshot {
             current: self.current.lock().await.clone(),
             shaft: self.shaft.lock().await.clone(),
+            state: self.state.lock().await.clone(),
+            command: self.command.lock().await.clone(),
         }
     }
 }

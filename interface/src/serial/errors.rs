@@ -1,6 +1,5 @@
 use defmt::Format;
 use error_set::error_set;
-use heapless::String;
 
 error_set! {
     #[derive(Format)]
@@ -13,9 +12,9 @@ error_set! {
     #[derive(Format)]
     DecodingError = {
         UnknownCommand,
-        NotEnoughArguments{
-            missing_argument: String<20>,
-        },
+        NotEnoughArguments,
+        TooManyArguments,
+        InvalidArgumentName,
         InvalidArgumentValue,
     };
     #[derive(Format)]

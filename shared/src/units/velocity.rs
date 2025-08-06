@@ -3,24 +3,24 @@ use core::str::FromStr;
 use defmt::Format;
 
 #[derive(Debug, Copy, Clone, Format, Eq, PartialEq)]
-pub struct Voltage(i16);
+pub struct Velocity(i16);
 
-impl Voltage {
+impl Velocity {
     #[inline(always)]
-    pub fn from_millivolts(val: i16) -> Self {
+    pub fn from_rpm(val: i16) -> Self {
         Self(val)
     }
 
     #[inline(always)]
-    pub fn as_millivolts(&self) -> i16 {
+    pub fn as_rpm(&self) -> i16 {
         self.0
     }
 }
 
-impl FromStr for Voltage {
+impl FromStr for Velocity {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::from_millivolts(s.parse::<i16>()?))
+        Ok(Self::from_rpm(s.parse::<i16>()?))
     }
 }

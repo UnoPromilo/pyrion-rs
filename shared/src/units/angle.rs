@@ -1,6 +1,8 @@
 use crate::units::Direction;
 use crate::units::cos_lut::COS_LUT;
 use core::marker::PhantomData;
+use core::num::ParseFloatError;
+use core::str::FromStr;
 use defmt::Format;
 use fixed::types::{I1F15, U16F16};
 
@@ -81,7 +83,7 @@ impl<T: AngleType> Angle<T> {
         }
     }
 
-    pub fn to_degrees(&self) -> U16F16 {
+    pub fn as_degrees(&self) -> U16F16 {
         // u16::MAX = 65535, so scale = 360/65535 = 0.00549...
         // In U16F16 representation: 0.00549... * 2^16 ≈ 360
         const SCALE: U16F16 = U16F16::from_bits(360);
@@ -97,6 +99,29 @@ impl Angle<Electrical> {
                 .wrapping_sub(offset)
                 .wrapping_mul(pole_pairs),
         )
+    }
+}
+
+impl<T: AngleType> FromStr for Angle<T> {
+    type Err = ParseAngleError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let degrees_float = s.parse::<f32>()?;
+        if degrees_float < 0f32 || degrees_float >= 360f32 {
+            return Err(ParseAngleError::OutOfRange);
+        }
+        Ok(Self::from_degrees(U16F16::from_num(degrees_float as u16)))
+    }
+}
+
+pub enum ParseAngleError {
+    ParseFloat(ParseFloatError),
+    OutOfRange,
+}
+
+impl From<ParseFloatError> for ParseAngleError {
+    fn from(value: ParseFloatError) -> Self {
+        ParseAngleError::ParseFloat(value)
     }
 }
 
@@ -118,8 +143,8 @@ mod test {
         for (from, to, expected) in cases {
             let a1 = Angle::<Electrical>::from_degrees(U16F16::from_num(from));
             let a2 = Angle::from_degrees(U16F16::from_num(to));
-            let actual1 = a1.get_abs(&a2).to_degrees();
-            let actual2 = a2.get_abs(&a1).to_degrees();
+            let actual1 = a1.get_abs(&a2).as_degrees();
+            let actual2 = a2.get_abs(&a1).as_degrees();
             assert_close(expected, actual1.to_num());
             assert_close(expected, actual2.to_num());
         }
@@ -170,16 +195,16 @@ mod test {
 
             assert!(
                 approx_eq(cos_val, expected_cos),
-                "cos failed for {}°: got {:?}, expected {:?}",
-                angle.to_degrees(),
+                "cos failed for {}°: got {}, expected {}",
+                angle.as_degrees(),
                 cos_val,
                 expected_cos
             );
 
             assert!(
                 approx_eq(sin_val, expected_sin),
-                "sin failed for {}: got {:?}, expected {:?}",
-                angle.to_degrees(),
+                "sin failed for {}: got {}, expected {}",
+                angle.as_degrees(),
                 sin_val,
                 expected_sin
             );

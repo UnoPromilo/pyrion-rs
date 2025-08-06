@@ -27,14 +27,14 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
         }
         Uninitialized => None,
         Initializing(CalibratingCurrentSensor(phase))
-            if elapsed > CURRENT_SENSOR_PHASE_CALIBRATION_TIME =>
-        {
-            match phase {
-                PhaseAPowered => Some(Initializing(CalibratingCurrentSensor(PhaseBPowered))),
-                PhaseBPowered => Some(Initializing(CalibratingCurrentSensor(PhaseCPowered))),
-                PhaseCPowered => Some(Idle),
+        if elapsed > CURRENT_SENSOR_PHASE_CALIBRATION_TIME =>
+            {
+                match phase {
+                    PhaseAPowered => Some(Initializing(CalibratingCurrentSensor(PhaseBPowered))),
+                    PhaseBPowered => Some(Initializing(CalibratingCurrentSensor(PhaseCPowered))),
+                    PhaseCPowered => Some(Idle),
+                }
             }
-        }
         Initializing(CalibratingCurrentSensor(_)) => None,
         Idle => None,
     }
