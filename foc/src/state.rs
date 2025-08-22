@@ -1,5 +1,5 @@
 use defmt::Format;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Instant;
 use shared::units::angle::{AngleAny, Electrical, Mechanical};
@@ -64,10 +64,10 @@ pub enum ControlCommand {
 
 #[derive(Debug)]
 pub struct Motor {
-    pub current: Mutex<NoopRawMutex, Option<PhaseCurrent>>,
-    pub shaft: Mutex<NoopRawMutex, Option<ShaftData>>,
-    pub state: Mutex<NoopRawMutex, MotorStateSnapshot>,
-    pub command: Mutex<NoopRawMutex, ControlCommand>,
+    pub current: Mutex<CriticalSectionRawMutex, Option<PhaseCurrent>>,
+    pub shaft: Mutex<CriticalSectionRawMutex, Option<ShaftData>>,
+    pub state: Mutex<CriticalSectionRawMutex, MotorStateSnapshot>,
+    pub command: Mutex<CriticalSectionRawMutex, ControlCommand>,
 }
 
 #[derive(Debug, Format, Clone, Copy)]

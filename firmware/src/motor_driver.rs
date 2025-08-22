@@ -1,8 +1,12 @@
+use crate::PWM_WRAP_SIGNAL;
 use crate::config::MotorConfig;
 use crate::map::map;
 use defmt::debug;
+use embassy_rp::pac::interrupt;
+use embassy_rp::pac::pwm::regs::Intr;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
-use embassy_rp::{Peri, pwm};
+use embassy_rp::{Peri, pac, pwm};
+use embassy_time::Instant;
 use embedded_hal::pwm::SetDutyCycle;
 use foc::Motor;
 use hardware_abstraction::motor_driver;
@@ -45,9 +49,11 @@ fn default_config() -> Config {
 
 impl<'d> MotorDriver<'d> {
     pub fn new(config: MotorConfig) -> Self {
+        let a_slice_index = config.a_slice.number();
         let a = new_pwm_synced(config.a_slice, config.a_high, config.a_low);
         let b = new_pwm_synced(config.b_slice, config.b_high, config.b_low);
         let c = new_pwm_synced(config.c_slice, config.c_high, config.c_low);
+        setup_interrupts(a_slice_index);
         Self { a, b, c }
     }
 }
@@ -105,7 +111,6 @@ impl motor_driver::MotorDriver for MotorDriver<'_> {
     }
 
     fn disable(&mut self) {
-
         let mut config = default_config();
         config.invert_b = false;
         self.a.set_config(&config);
@@ -161,4 +166,31 @@ pub async fn drive_motor_task(motor: &'static Motor, hardware_config: MotorConfi
         foc::state_machine::on_tick(motor, &mut motor_driver).await;
         embassy_futures::yield_now().await;
     }
+}
+
+fn setup_interrupts(slice_index: usize) {
+    match slice_index {
+        0 => pac::PWM.inte().modify(|w| w.set_ch0(true)),
+        1 => pac::PWM.inte().modify(|w| w.set_ch1(true)),
+        2 => pac::PWM.inte().modify(|w| w.set_ch2(true)),
+        3 => pac::PWM.inte().modify(|w| w.set_ch3(true)),
+        4 => pac::PWM.inte().modify(|w| w.set_ch4(true)),
+        5 => pac::PWM.inte().modify(|w| w.set_ch5(true)),
+        6 => pac::PWM.inte().modify(|w| w.set_ch6(true)),
+        7 => pac::PWM.inte().modify(|w| w.set_ch7(true)),
+        _ => panic!("Invalid slice index"),
+    }
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(interrupt::PWM_IRQ_WRAP);
+    }
+}
+
+#[interrupt]
+fn PWM_IRQ_WRAP() {
+    critical_section::with(|_cs| {
+        let now = Instant::now();
+        PWM_WRAP_SIGNAL.signal(now);
+        let status = pac::PWM.intr().read();
+        pac::PWM.intr().write_value(status);
+    });
 }

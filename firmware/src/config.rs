@@ -8,6 +8,7 @@ pub struct HardwareConfig {
     pub i2c: Option<I2cConfig>,
     pub angle_sensor: AngleSensorConfig,
     pub uart: Option<UartConfig>,
+    pub core1: Peri<'static, CORE1>,
 }
 
 pub struct MotorConfig {
@@ -63,6 +64,7 @@ impl HardwareConfig {
     pub fn rp2040() -> Self {
         let p = embassy_rp::init(Default::default());
         Self {
+            core1: p.CORE1,
             motor: MotorConfig {
                 a_slice: p.PWM_SLICE1,
                 a_high: p.PIN_2,

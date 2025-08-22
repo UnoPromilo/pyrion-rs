@@ -1,3 +1,4 @@
+use crate::PWM_WRAP_SIGNAL;
 use crate::config::{CurrentConfig, CurrentMeasurementConfig};
 use defmt::{info, warn};
 use embassy_rp::adc::{Adc, AdcPin, Async};
@@ -137,8 +138,12 @@ async fn update_current_dma_run_until_error<R: CurrentReader>(
     sensor: &mut R,
 ) -> Result<(), R::Error> {
     loop {
+        let time_of_wrap = PWM_WRAP_SIGNAL.wait().await;
+        if (time_of_wrap.elapsed().as_ticks() as u32) > 10 {
+            // 10 ticks is too late for accurate measurement, it is better to skip it.
+            continue;
+        }
+
         motor.update_current(sensor).await?;
-        // Run as often as possible but allow other tasks to execute too
-        embassy_futures::yield_now().await;
     }
 }

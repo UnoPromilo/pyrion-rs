@@ -28,10 +28,10 @@ impl Motor {
     ) -> Result<(), R::Error> {
         if self.is_calibrating().await {
             let mut calibration_accumulator = CalibrationAccumulator::default();
+            let mut sample_count = 0u32;
 
             loop {
                 let state = { self.state.lock().await.state };
-                let mut sample_count = 0u32;
                 match state {
                     Initializing(CalibratingCurrentSensor(cal_state)) => {
                         let raw_output = current_reader.read_raw().await?;
@@ -41,17 +41,16 @@ impl Motor {
                     }
                     _ => break,
                 }
-                debug!(
-                    "Current sensor calibration was based on {} samples",
-                    sample_count
-                );
             }
-
+            debug!(
+                "Current sensor calibration was based on {} samples",
+                sample_count
+            );
             let (a, b, c) = calibration_accumulator.finalize();
             current_reader.calibrate_current(a, b, c).await;
         }
 
-        let output = current_reader.read().await?;
+        let output = current_reader.read().await?; 
         let phase_current = PhaseCurrent::from_output(output);
 
         *self.current.lock().await = Some(phase_current);
