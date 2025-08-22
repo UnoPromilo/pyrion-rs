@@ -3,7 +3,6 @@ use crate::config::MotorConfig;
 use crate::map::map;
 use defmt::debug;
 use embassy_rp::pac::interrupt;
-use embassy_rp::pac::pwm::regs::Intr;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embassy_rp::{Peri, pac, pwm};
 use embassy_time::Instant;
