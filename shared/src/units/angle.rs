@@ -6,9 +6,9 @@ use defmt::Format;
 use fixed::ParseFixedError;
 use fixed::types::{I1F15, U16F16};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Electrical;
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Mechanical;
 
 pub trait AngleType {}
@@ -30,7 +30,7 @@ pub enum AngleAny {
 }
 
 impl<T: AngleType> Angle<T> {
-    pub fn from_raw(raw_angle: u16) -> Self {
+    pub const fn from_raw(raw_angle: u16) -> Self {
         Self {
             raw_angle,
             _kind: PhantomData,
@@ -88,6 +88,34 @@ impl<T: AngleType> Angle<T> {
         // In U16F16 representation: 0.00549... * 2^16 ≈ 360
         const SCALE: U16F16 = U16F16::from_bits(360);
         U16F16::from_num(self.raw_angle) * SCALE
+    }
+
+    pub fn checked_add(&self, other: &Self) -> Option<Self> {
+        self.raw_angle.checked_add(other.raw_angle).map(|raw| Self {
+            raw_angle: raw,
+            _kind: PhantomData,
+        })
+    }
+
+    pub fn overflowing_add(&self, other: &Self) -> Self {
+        Self {
+            raw_angle: self.raw_angle.overflowing_add(other.raw_angle).0,
+            _kind: PhantomData,
+        }
+    }
+
+    pub fn overflowing_sub(&self, other: &Self) -> Self {
+        Self {
+            raw_angle: self.raw_angle.overflowing_sub(other.raw_angle).0,
+            _kind: PhantomData,
+        }
+    }
+
+    pub fn inverted(&self) -> Self {
+        Self {
+            raw_angle: u16::MAX - self.raw_angle,
+            _kind: PhantomData,
+        }
     }
 }
 

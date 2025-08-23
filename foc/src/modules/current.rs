@@ -37,7 +37,6 @@ impl Motor {
                         let raw_output = current_reader.read_raw().await?;
                         calibration_accumulator.update(cal_state, raw_output);
                         sample_count += 1;
-                        embassy_futures::yield_now().await;
                     }
                     _ => break,
                 }
@@ -50,7 +49,7 @@ impl Motor {
             current_reader.calibrate_current(a, b, c).await;
         }
 
-        let output = current_reader.read().await?; 
+        let output = current_reader.read().await?;
         let phase_current = PhaseCurrent::from_output(output);
 
         *self.current.lock().await = Some(phase_current);

@@ -22,7 +22,6 @@ async fn handle_get_state(motor: &Motor) -> CommandResult {
 }
 
 async fn handle_set_control_state(control_command: ControlCommand, motor: &Motor) -> CommandResult {
-    let mut command_ptr = motor.command.lock().await;
-    *command_ptr = control_command;
+    motor.command.signal(control_command);
     CommandResult::Ok
 }
