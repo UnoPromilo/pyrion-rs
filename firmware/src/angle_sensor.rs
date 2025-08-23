@@ -1,11 +1,11 @@
 use crate::config::AngleSensorConfig;
 use crate::i2c::I2c;
-use defmt::{info, warn};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_time::Timer;
 use embedded_hal_async::i2c;
 use foc::Motor;
 use hardware_abstraction::angle_sensor::AngleReader;
+use shared::{info, warn};
 use shared::units::Angle;
 use shared::units::angle::AngleAny;
 

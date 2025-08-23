@@ -1,7 +1,7 @@
 use crate::PWM_WRAP_SIGNAL;
 use crate::config::MotorConfig;
 use crate::map::map;
-use defmt::debug;
+use shared::debug;
 use embassy_rp::pac::interrupt;
 use embassy_rp::pwm::{ChannelAPin, ChannelBPin, Config, Pwm, Slice};
 use embassy_rp::{Peri, pac, pwm};

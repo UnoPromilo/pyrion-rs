@@ -3,8 +3,13 @@ name = "interface"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+defmt = ["dep:defmt", "heapless/defmt", "error_set/defmt", "foc/defmt", "shared/defmt"]
+log = ["error_set/log", "foc/log", "shared/log"]
+
 [dependencies]
-heapless = { version = "0.8.0", features = ["defmt-03"] }
-error_set = { version = "0.8.5", features = ["defmt"] }
-defmt = "1.0.1"
+defmt = { version = "1.0.1", optional = true }
+heapless = { version = "0.9.1" }
+error_set = { version = "0.8.5" }
 foc = { path = "../foc" }
+shared = { path = "../shared" }

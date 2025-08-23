@@ -3,10 +3,9 @@ use crate::state::{
     CalibratingCurrentSensorState, InitializationState::CalibratingCurrentSensor,
     MotorState::Initializing, PhaseCurrent,
 };
-use defmt::debug;
-
 use hardware_abstraction::current_sensor;
 use hardware_abstraction::current_sensor::{CurrentReader, RawOutput};
+use shared::debug;
 
 #[derive(Default)]
 struct ChannelAccumulator {

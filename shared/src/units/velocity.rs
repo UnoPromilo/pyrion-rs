@@ -1,8 +1,8 @@
 use core::num::ParseIntError;
 use core::str::FromStr;
-use defmt::Format;
 
-#[derive(Debug, Copy, Clone, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Velocity(i16);
 
 impl Velocity {
@@ -13,6 +13,7 @@ impl Velocity {
 
     #[inline(always)]
     pub fn as_rpm(&self) -> i16 {
+        info!("test");
         self.0
     }
 }

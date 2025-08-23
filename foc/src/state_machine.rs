@@ -3,9 +3,9 @@ use crate::state::{
     CalibratingCurrentSensorState::*, ControlCommand, InitializationState::*, MeasurementState::*,
     MotorState, MotorState::*, MotorStateSnapshot,
 };
-use defmt::info;
 use embassy_time::Duration;
 use hardware_abstraction::motor_driver::MotorDriver;
+use shared::info;
 use shared::units::Angle;
 use shared::units::angle::Electrical;
 

@@ -1,6 +1,5 @@
-use defmt::Format;
-
-#[derive(Debug, Copy, Clone, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Resistance(i16);
 
 impl Resistance {

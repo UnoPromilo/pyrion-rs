@@ -1,11 +1,11 @@
 use crate::config::UartConfig;
-use defmt::{info, warn};
 use embassy_rp::uart::Uart;
 use embassy_rp::{bind_interrupts, peripherals, uart};
 use foc::Motor;
 use interface::CommandResult;
 use interface::serial::RawCommand;
 use interface::serial::errors::CommandChainError;
+use shared::{info, warn};
 
 bind_interrupts!(struct Irqs {
     UART0_IRQ => uart::InterruptHandler<peripherals::UART0>;

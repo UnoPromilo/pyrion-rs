@@ -1,9 +1,9 @@
-use defmt::Format;
 use shared::units::{Current, Resistance, Voltage};
 
 const SHIFT: u8 = 32;
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub struct ConversionConstants {
     adc_to_mv_scale: u64,
     gain_scale: u64,

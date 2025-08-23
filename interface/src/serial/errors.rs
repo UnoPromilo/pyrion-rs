@@ -1,15 +1,14 @@
-use defmt::Format;
 use error_set::error_set;
 
 error_set! {
-    #[derive(Format)]
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     ParsingError = {
         Empty,
         InvalidCommandFormat,
         InvalidArgumentFormat,
         TooManyArguments
     };
-    #[derive(Format)]
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     DecodingError = {
         UnknownCommand,
         NotEnoughArguments,
@@ -17,6 +16,6 @@ error_set! {
         InvalidArgumentName,
         InvalidArgumentValue,
     };
-    #[derive(Format)]
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     CommandChainError = ParsingError || DecodingError;
 }

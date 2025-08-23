@@ -1,4 +1,6 @@
-const FRAC_SQRT_3_2_Q15: i32 = 28377;
+use shared::fixed::types::I16F16;
+
+const SQRT3_OVER_2: I16F16 = I16F16::lit("0.86602540378");
 
 /// Performs the inverse Clarke transformation.
 ///
@@ -27,20 +29,24 @@ const FRAC_SQRT_3_2_Q15: i32 = 28377;
 // TODO remove if still not used
 #[allow(dead_code)]
 pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
-    // TODO convert to fixed
+    let alpha = I16F16::from(alpha);
+    let beta = I16F16::from(beta);
     let a = alpha;
-    let b = (((-(alpha as i32)) >> 1) + ((beta as i32 * FRAC_SQRT_3_2_Q15) >> 15)) as i16;
-    let c = (((-(alpha as i32)) >> 1) - ((beta as i32 * FRAC_SQRT_3_2_Q15) >> 15)) as i16;
-    (a, b, c)
+    let b = alpha.saturating_neg() / 2 + beta * SQRT3_OVER_2;
+    let c = alpha.saturating_neg() / 2 - beta * SQRT3_OVER_2;
+
+    (a.to_num(), b.to_num(), c.to_num())
 }
 
 #[cfg(test)]
 mod tests {
+    const FRAC_SQRT_3_2_Q15: i32 = 28377;
     use super::*;
     const TOLERANCE: i16 = 3;
 
     #[test]
     fn test_inverse_clarke_cardinals() {
+        // alpha, beta, a, b, c
         let cases: &[(i16, i16, i16, i16, i16)] = &[
             (i16::MAX, 0, i16::MAX, -i16::MAX / 2, -i16::MAX / 2),
             (i16::MIN, 0, i16::MIN, i16::MAX / 2, i16::MAX / 2),

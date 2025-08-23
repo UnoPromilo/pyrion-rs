@@ -1,4 +1,3 @@
-use defmt::Format;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
@@ -6,14 +5,16 @@ use embassy_time::Instant;
 use shared::units::angle::{AngleAny, Electrical, Mechanical};
 use shared::units::{Angle, Current, Direction, Velocity, Voltage};
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub struct PhaseCurrent {
     pub a: Current,
     pub b: Current,
     pub c: Current,
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub struct ShaftData {
     pub angle: AngleAny,
     pub electrical_angle: Angle<Electrical>,
@@ -21,14 +22,16 @@ pub struct ShaftData {
     pub encoder_calibration: EncoderCalibrationConstants,
 }
 
-#[derive(Debug, Format, Clone, Copy, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct EncoderCalibrationConstants {
     pub direction: Direction,
     pub offset: u16,
     pub pole_pairs: u16,
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub struct MotorStateSnapshot {
     pub state: MotorState,
     pub state_set_at: Instant,
@@ -43,7 +46,8 @@ impl MotorStateSnapshot {
     }
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub enum MotorState {
     Uninitialized,
     Initializing(InitializationState),
@@ -51,26 +55,30 @@ pub enum MotorState {
     Measuring(MeasurementState),
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub enum InitializationState {
     CalibratingCurrentSensor(CalibratingCurrentSensorState),
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub enum CalibratingCurrentSensorState {
     PhaseAPowered,
     PhaseBPowered,
     PhaseCPowered,
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub enum MeasurementState {
     Direction(Angle<Electrical>),
     MagneticPoles(Angle<Electrical>, u8),
     MagneticOffset(Angle<Electrical>),
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub enum ControlCommand {
     CalibrateEncoder,
     SetTargetZero,
@@ -87,7 +95,8 @@ pub struct Motor {
     pub command: Signal<CriticalSectionRawMutex, ControlCommand>,
 }
 
-#[derive(Debug, Format, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
 pub struct MotorSnapshot {
     pub current: Option<PhaseCurrent>,
     pub shaft: Option<ShaftData>,

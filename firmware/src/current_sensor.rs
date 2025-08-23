@@ -1,6 +1,5 @@
 use crate::PWM_WRAP_SIGNAL;
 use crate::config::{CurrentConfig, CurrentMeasurementConfig};
-use defmt::{info, warn};
 use embassy_rp::adc::{Adc, AdcPin, Async};
 use embassy_rp::gpio::Pull;
 use embassy_rp::{Peri, adc, bind_interrupts, dma};
@@ -10,6 +9,7 @@ use foc::functions::adc_conversion::{
     ConversionConstants, calculate_scaling_constants, from_adc_to_current,
 };
 use hardware_abstraction::current_sensor::{CurrentReader, Output, RawOutput};
+use shared::{info, warn};
 
 bind_interrupts!(struct Irqs {
     ADC_IRQ_FIFO => adc::InterruptHandler;

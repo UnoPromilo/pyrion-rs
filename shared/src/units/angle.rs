@@ -2,7 +2,6 @@ use crate::units::Direction;
 use crate::units::cos_lut::COS_LUT;
 use core::marker::PhantomData;
 use core::str::FromStr;
-use defmt::Format;
 use fixed::ParseFixedError;
 use fixed::types::{I1F15, U16F16};
 
@@ -16,14 +15,16 @@ pub trait AngleType {}
 impl AngleType for Electrical {}
 impl AngleType for Mechanical {}
 
-#[derive(Debug, Copy, Clone, Format, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 
 pub struct Angle<T: AngleType> {
     raw_angle: u16,
     _kind: PhantomData<T>,
 }
 
-#[derive(Debug, Copy, Clone, Format)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Copy, Clone)]
 pub enum AngleAny {
     Electrical(Angle<Electrical>),
     Mechanical(Angle<Mechanical>),

@@ -3,10 +3,14 @@ name = "foc"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+defmt = ["dep:defmt", "embassy-futures/defmt", "embassy-time/defmt", "embassy-sync/defmt", "hardware-abstraction/defmt", "shared/defmt"]
+log = ["embassy-futures/log", "embassy-time/log", "embassy-sync/log", "hardware-abstraction/log", "shared/log"]
+
 [dependencies]
-defmt = "1.0.1"
-embassy-futures = { version = "0.1.1", features = ["defmt"] }
-embassy-time = { version = "0.4.0", features = ["defmt"] }
-embassy-sync = "0.7.0"
+defmt = { version = "1.0.1", optional = true }
+embassy-futures = { version = "0.1.1" }
+embassy-time = { version = "0.4.0" }
+embassy-sync = { version = "0.7.1" }
 hardware-abstraction = { path = "../hardware_abstraction" }
 shared = { path = "../shared" }
