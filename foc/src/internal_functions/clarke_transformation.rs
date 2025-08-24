@@ -2,32 +2,6 @@ use shared::fixed::types::I16F16;
 
 const SQRT3_OVER_2: I16F16 = I16F16::lit("0.86602540378");
 
-/// Performs the inverse Clarke transformation.
-///
-/// Converts α/β (stationary 2-phase) current vector components back into
-/// three-phase (A, B, C) current values.
-///
-/// # Input
-/// - `alpha`: α-axis current component, range: from `i16::MIN` to `i16::MAX`
-/// - `beta`: β-axis current component, range: from `i16::MIN` to `i16::MAX`
-/// - `alpha` +- `beta`: must be in range from `i16::MIN` to `i16::MAX`
-///
-/// Both inputs should represent Q15-scaled values, covering the full dynamic range
-/// of `i16`. Internally, the computation uses 32-bit arithmetic to preserve accuracy
-/// and avoid overflow during intermediate steps.
-///
-/// # Returns
-/// Tuple `(a, b, c)` where:
-/// - Each output is a phase current value (in Q15 format)
-/// - The sum of all three values is always zero (balanced 3-phase system)
-/// - Values cover the full `i16` range (±32,768)
-///
-/// # Notes
-/// - The function assumes ideal conditions (no offset, noise, or imbalance)
-/// - Internally uses `FRAC_SQRT_3_2_Q15` (√3 / 2 in Q15 format)
-/// - This function is deterministic and panic-free (does not overflow)
-// TODO remove if still not used
-#[allow(dead_code)]
 pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
     let alpha = I16F16::from(alpha);
     let beta = I16F16::from(beta);
@@ -42,7 +16,7 @@ pub fn inverse(alpha: i16, beta: i16) -> (i16, i16, i16) {
 mod tests {
     const FRAC_SQRT_3_2_Q15: i32 = 28377;
     use super::*;
-    const TOLERANCE: i16 = 3;
+    const TOLERANCE: i16 = 2;
 
     #[test]
     fn test_inverse_clarke_cardinals() {

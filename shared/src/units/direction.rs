@@ -1,7 +1,6 @@
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum Direction {
-    #[default]
     Clockwise,
     CounterClockwise,
 }

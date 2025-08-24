@@ -23,11 +23,21 @@ pub struct ShaftData {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct EncoderCalibrationConstants {
     pub direction: Direction,
     pub offset: u16,
     pub pole_pairs: u16,
+}
+
+impl Default for EncoderCalibrationConstants {
+    fn default() -> Self {
+        Self {
+            direction: Direction::Clockwise,
+            offset: 0,
+            pole_pairs: 1,
+        }
+    }
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -52,7 +62,7 @@ pub enum MotorState {
     Uninitialized,
     Initializing(InitializationState),
     Idle,
-    Measuring(MeasurementState),
+    Powered(Powered),
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -67,6 +77,12 @@ pub enum CalibratingCurrentSensorState {
     PhaseAPowered,
     PhaseBPowered,
     PhaseCPowered,
+}
+
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy)]
+pub enum Powered {
+    Measuring(MeasurementState),
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

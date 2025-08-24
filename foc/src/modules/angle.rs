@@ -1,9 +1,11 @@
 use crate::Motor;
 use crate::state::MeasurementState::Direction;
-use crate::state::MotorState::Measuring;
+use crate::state::MotorState::Powered;
+use crate::state::Powered::Measuring;
 use crate::state::{EncoderCalibrationConstants, MotorState, ShaftData};
 use embassy_time::Instant;
 use hardware_abstraction::angle_sensor::AngleReader;
+use shared::info;
 use shared::units::Angle;
 use shared::units::angle::{AngleAny, Electrical, Mechanical};
 
@@ -35,7 +37,7 @@ impl Motor {
                 AngleAny::Electrical(_) => return Ok(()),
             };
 
-            if let Measuring(Direction(current_cmd)) = self.get_state().await {
+            if let Powered(Measuring(Direction(current_cmd))) = self.get_state().await {
                 if Some(current_cmd) == last_cmd {
                     embassy_futures::yield_now().await;
                     continue;
@@ -57,15 +59,19 @@ impl Motor {
                     None => return Ok(()),
                 };
 
-                *shaft_data_guard = Some(ShaftData {
-                    encoder_calibration: EncoderCalibrationConstants {
-                        direction: if correlation > 1 {
-                            shared::units::Direction::Clockwise
-                        } else {
-                            shared::units::Direction::CounterClockwise
-                        },
-                        ..old_shaft_data.encoder_calibration
+                let encoder_calibration = EncoderCalibrationConstants {
+                    direction: if correlation > 1 {
+                        shared::units::Direction::Clockwise
+                    } else {
+                        shared::units::Direction::CounterClockwise
                     },
+                    ..old_shaft_data.encoder_calibration
+                };
+
+                info!("New encoder calibration: {}", encoder_calibration);
+
+                *shaft_data_guard = Some(ShaftData {
+                    encoder_calibration,
                     ..old_shaft_data
                 });
 
@@ -108,6 +114,6 @@ impl Motor {
     }
 
     async fn is_measuring_direction(&self) -> bool {
-        matches!(self.get_state().await, Measuring(Direction(_)))
+        matches!(self.get_state().await, Powered(Measuring(Direction(_))))
     }
 }

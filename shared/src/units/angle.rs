@@ -61,22 +61,30 @@ impl<T: AngleType> Angle<T> {
     }
 
     pub fn cos(&self) -> I1F15 {
-        let cos_q = (self.raw_angle >> 6) as usize;
-        COS_LUT[cos_q]
+        Self::cos_raw(self.raw_angle)
     }
 
     pub fn sin(&self) -> I1F15 {
         const FRAC_PI_2: u16 = u16::MAX / 4;
-        let sin_q = (FRAC_PI_2.wrapping_sub(self.raw_angle) >> 6) as usize;
-        COS_LUT[sin_q]
+        Self::cos_raw(FRAC_PI_2.wrapping_sub(self.raw_angle))
+    }
+
+    fn cos_raw(raw: u16) -> I1F15 {
+        let index = (raw >> 6) as usize;
+        let fraction = raw & 0x3F;
+
+        let a = COS_LUT[index];
+        let b = COS_LUT[(index + 1) % COS_LUT.len()];
+
+        let weight = I1F15::from_bits(((fraction as i32) << 9) as i16);
+        a + (b - a) * weight
     }
 
     pub fn from_degrees(degrees: U16F16) -> Self {
-        let max_degrees = U16F16::from_num(360);
-        debug_assert!(degrees < max_degrees);
-        // u16::MAX = 65535, so scale = 65535 / 360 = 182.041...
-        // In U16F16 representation: 182.041... * 2^16 ≈ 11930283
-        const SCALE: U16F16 = U16F16::from_bits(11930283);
+        const MAX_DEGREES: U16F16 = U16F16::lit("360");
+        debug_assert!(degrees < MAX_DEGREES);
+        //  65535 / 360
+        const SCALE: U16F16 = U16F16::lit("18.4087078652");
         let scaled = degrees * SCALE;
         Self {
             raw_angle: scaled.to_num::<u16>(),
@@ -85,9 +93,8 @@ impl<T: AngleType> Angle<T> {
     }
 
     pub fn as_degrees(&self) -> U16F16 {
-        // u16::MAX = 65535, so scale = 360/65535 = 0.00549...
-        // In U16F16 representation: 0.00549... * 2^16 ≈ 360
-        const SCALE: U16F16 = U16F16::from_bits(360);
+        // 360/65535
+        const SCALE: U16F16 = U16F16::lit("0.005493247883");
         U16F16::from_num(self.raw_angle) * SCALE
     }
 

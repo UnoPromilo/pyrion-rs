@@ -2,31 +2,6 @@ use shared::fixed::types::I16F16;
 use shared::units::Angle;
 use shared::units::angle::Electrical;
 
-/// Performs the inverse Park transformation.
-///
-/// Converts rotating D/Q-axis current vector components (`i_d`, `i_q`) back into
-/// stationary α/β (2-phase) reference frame components using the provided electrical angle.
-///
-/// # Input
-/// - `i_d`: Direct-axis (D) current component, Q15-scaled, range: `i16::MIN` to `i16::MAX`
-/// - `i_q`: Quadrature-axis (Q) current component, Q15-scaled, range: `i16::MIN` to `i16::MAX`
-/// - `electrical_angle`: Electrical rotor angle, fixed-point representation (`ElectricalAngle`)
-///
-/// Internally, sine and cosine of the angle are evaluated using Q15 format (i16),
-/// and all calculations are performed in 32-bit to avoid intermediate overflow.
-///
-/// # Returns
-/// Tuple `(alpha, beta)` where:
-/// - `alpha`: α-axis current component (Q15 format)
-/// - `beta`: β-axis current component (Q15 format)
-/// - Output range: full `i16` range (±32,768), precision depends on input magnitude and angle
-///
-/// # Notes
-/// - The function assumes normalized, balanced input values
-/// - Uses fixed-point arithmetic (`Q15`) throughout
-/// - Internally applies right-shift by 15 to scale down 32-bit intermediate results
-/// - This function is deterministic and does not panic or overflow
-// TODO remove if still not used
 #[allow(dead_code)]
 pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &Angle<Electrical>) -> (i16, i16) {
     let sin_theta = electrical_angle.sin().to_num::<I16F16>();
@@ -45,7 +20,7 @@ mod tests {
     use core::f32::consts::FRAC_1_SQRT_2;
     use shared::fixed::types::U16F16;
 
-    const TOLERANCE: i16 = 201; //~0.6% error TODO improve cos/sin to minimalize
+    const TOLERANCE: i16 = 4;
 
     #[test]
     fn test_inverse_park_cardinals() {
