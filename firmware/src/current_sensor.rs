@@ -124,26 +124,13 @@ pub async fn update_current_dma_task(
     );
 
     loop {
-        let result = update_current_dma_run_until_error(motor, &mut sensor).await;
+        let result = motor
+            .update_current_task(&PWM_WRAP_SIGNAL, &mut sensor)
+            .await;
         if let Err(e) = result {
             warn!("Error while operating ADC: {:?}", e);
         }
         info!("ADC will be restarted after 1 s.");
         Timer::after_secs(1).await;
-    }
-}
-
-async fn update_current_dma_run_until_error<R: CurrentReader>(
-    motor: &'static Motor,
-    sensor: &mut R,
-) -> Result<(), R::Error> {
-    loop {
-        let time_of_wrap = PWM_WRAP_SIGNAL.wait().await;
-        if (time_of_wrap.elapsed().as_ticks() as u32) > 10 {
-            // 10 ticks is too late for accurate measurement, it is better to skip it.
-            continue;
-        }
-
-        motor.update_current(sensor).await?;
     }
 }

@@ -1,8 +1,7 @@
 #![no_std]
 pub(crate) mod log;
 pub mod units;
-
-pub use fixed;
+pub mod functions;
 
 #[cfg(test)]
 extern crate alloc;

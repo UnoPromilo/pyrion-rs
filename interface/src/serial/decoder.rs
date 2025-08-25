@@ -10,7 +10,7 @@ use foc::state::ControlCommand;
 pub fn decode_command(command_envelope: &CommandEnvelope) -> Result<Command, DecodingError> {
     match command_envelope.name {
         "echo" => Ok(Echo),
-        "get_state" => Ok(GetState),
+        "get" => decode_get_command(&command_envelope.args),
         "calibrate" => decode_calibrate_command(&command_envelope.args),
         "set_target" => decode_set_control_command(&command_envelope.args),
         &_ => Err(UnknownCommand),
@@ -54,10 +54,26 @@ fn decode_calibrate_command(args: &ArgList) -> Result<Command, DecodingError> {
             // Safe because we checked the length above.
             let argument = args.items.first().unwrap();
             let parameter = match argument.name {
-                "encoder" => Ok(ControlCommand::CalibrateEncoder),
+                "shaft" => Ok(ControlCommand::CalibrateShaft),
                 &_ => Err(InvalidArgumentValue),
             }?;
             Ok(SetControlCommand(parameter))
+        }
+        _ => Err(TooManyArguments),
+    }
+}
+
+fn decode_get_command(args: &ArgList) -> Result<Command, DecodingError> {
+    match args.items.len() {
+        0 => Err(NotEnoughArguments),
+        1 => {
+            // Safe because we checked the length above.
+            let argument = args.items.first().unwrap();
+            match argument.name {
+                "state" => Ok(GetState),
+                "shaft" => Ok(GetShaft),
+                &_ => Err(InvalidArgumentValue),
+            }
         }
         _ => Err(TooManyArguments),
     }

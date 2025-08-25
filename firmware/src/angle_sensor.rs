@@ -5,9 +5,9 @@ use embassy_time::Timer;
 use embedded_hal_async::i2c;
 use foc::Motor;
 use hardware_abstraction::angle_sensor::AngleReader;
-use shared::{info, warn};
 use shared::units::Angle;
 use shared::units::angle::AngleAny;
+use shared::{info, warn};
 
 type Device<I2C> = as5600::AS5600<I2C>;
 
@@ -74,7 +74,5 @@ async fn as5600_run_until_error(
     info!("Initializing AS5600 sensor...");
     let as5600 = as5600::AS5600::new(i2c, as5600::Config::default()).await?;
     let mut sensor = AS5600Sensor::from(as5600);
-    loop {
-        motor.update_angle(&mut sensor).await?;
-    }
+    motor.update_angle_task(&mut sensor).await
 }

@@ -1,8 +1,8 @@
 use crate::Motor;
 use crate::internal_functions::{clarke_transformation, park_transformation};
 use crate::state::{
-    CalibratingCurrentSensorState::*, ControlCommand, InitializationState::*, MeasurementState::*,
-    MotorState, MotorState::*, MotorStateSnapshot, Powered::*,
+    CalibratingCurrentSensorState::*, ControlCommand, EncoderCalibrationState::*,
+    InitializationState::*, MotorState, MotorState::*, MotorStateSnapshot, Powered::*,
 };
 use embassy_time::Duration;
 use hardware_abstraction::motor_driver::MotorDriver;
@@ -32,9 +32,9 @@ pub async fn on_tick(motor: &Motor, driver: &mut impl MotorDriver) {
 fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState> {
     const INITIAL_DEAD_TIME: Duration = Duration::from_millis(500);
     const CURRENT_SENSOR_PHASE_CALIBRATION_TIME: Duration = Duration::from_millis(100);
-    const MEASUREMENT_STEP_TIME: Duration = Duration::from_millis(5);
-    const ENCODER_CALIBRATION_STEP: Angle<Electrical> = Angle::<Electrical>::from_raw(182); // Around 1 degree
-    const ENCODER_POLES_MEASURING_ROTATIONS: u8 = 3;
+    const MEASUREMENT_STEP_TIME: Duration = Duration::from_millis(4);
+    const ENCODER_CALIBRATION_STEP: Angle<Electrical> = Angle::<Electrical>::from_raw(360); // Around 2 degrees
+    const ENCODER_POLES_MEASURING_ROTATIONS: u8 = 2;
 
     match current {
         Uninitialized if elapsed > INITIAL_DEAD_TIME => {
@@ -52,46 +52,59 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
         }
         Initializing(CalibratingCurrentSensor(_)) => None,
         Idle => None,
-        Powered(Measuring(measurement)) if elapsed > MEASUREMENT_STEP_TIME => match measurement {
-            Direction(current_angle) => {
-                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP) {
-                    Some(Powered(Measuring(Direction(new_angle))))
-                } else {
-                    info!("Measuring direction done");
-                    info!("Measuring magnetic poles");
-                    Some(Powered(Measuring(MagneticPoles(
-                        Angle::<Electrical>::from_raw(0),
-                        0,
-                    ))))
+        Powered(EncoderCalibration(measurement)) if elapsed > MEASUREMENT_STEP_TIME => {
+            match measurement {
+                WarmUp(current_angle) => {
+                    if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP) {
+                        Some(Powered(EncoderCalibration(WarmUp(new_angle))))
+                    } else {
+                        info!("Measuring...");
+                        Some(Powered(EncoderCalibration(Measuring(
+                            Angle::<Electrical>::zero(),
+                            0,
+                        ))))
+                    }
+                }
+                Measuring(current_angle, rotation_count) => {
+                    if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP) {
+                        Some(Powered(EncoderCalibration(Measuring(
+                            new_angle,
+                            rotation_count,
+                        ))))
+                    } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
+                        let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEP);
+                        Some(Powered(EncoderCalibration(Measuring(
+                            new_angle,
+                            rotation_count + 1,
+                        ))))
+                    } else {
+                        info!("Measuring done!");
+                        info!("Spinning back to the original position");
+                        Some(Powered(EncoderCalibration(Return(
+                            Angle::<Electrical>::max(),
+                            ENCODER_POLES_MEASURING_ROTATIONS + 1,
+                        ))))
+                    }
+                }
+                Return(current_angle, rotation_count) => {
+                    if let Some(new_angle) = current_angle.checked_sub(&ENCODER_CALIBRATION_STEP) {
+                        Some(Powered(EncoderCalibration(Return(
+                            new_angle,
+                            rotation_count,
+                        ))))
+                    } else if rotation_count > 0 {
+                        let new_angle = current_angle.overflowing_sub(&ENCODER_CALIBRATION_STEP);
+                        Some(Powered(EncoderCalibration(Return(
+                            new_angle,
+                            rotation_count - 1,
+                        ))))
+                    } else {
+                        Some(Idle)
+                    }
                 }
             }
-            MagneticPoles(current_angle, rotation_count) => {
-                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP) {
-                    Some(Powered(Measuring(MagneticPoles(new_angle, rotation_count))))
-                } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
-                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEP);
-                    Some(Powered(Measuring(MagneticPoles(
-                        new_angle,
-                        rotation_count + 1,
-                    ))))
-                } else {
-                    info!("Measuring magnetic poles done");
-                    info!("Measuring magnetic offset");
-                    Some(Powered(Measuring(MagneticOffset(
-                        Angle::<Electrical>::from_raw(0),
-                    ))))
-                }
-            }
-            MagneticOffset(current_angle) => {
-                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP) {
-                    Some(Powered(Measuring(MagneticOffset(new_angle))))
-                } else {
-                    info!("Measuring magnetic offset done");
-                    Some(Idle)
-                }
-            }
-        },
-        Powered(Measuring(_)) => None,
+        }
+        Powered(EncoderCalibration(_)) => None,
     }
 }
 
@@ -131,8 +144,8 @@ fn apply_state_transition(
                 driver.enable_synced();
             }
             match powered {
-                Measuring(measurement) => match measurement {
-                    Direction(angle) | MagneticPoles(angle, _) | MagneticOffset(angle) => {
+                EncoderCalibration(measurement) => match measurement {
+                    WarmUp(angle) | Measuring(angle, _) | Return(angle, _) => {
                         drive_motor(&angle, driver);
                     }
                 },
@@ -146,17 +159,17 @@ fn does_state_allow_command_handling(current: MotorState) -> bool {
         Uninitialized => false,
         Initializing(_) => false,
         Idle => true,
-        Powered(Measuring(_)) => false,
+        Powered(EncoderCalibration(_)) => false,
     }
 }
 
 fn handle_command(control_command: ControlCommand) -> Option<MotorState> {
     match control_command {
-        ControlCommand::CalibrateEncoder => {
-            info!("Calibrating encoder");
-            info!("Measuring magnetic direction");
-            Some(Powered(Measuring(Direction(
-                Angle::<Electrical>::from_raw(0),
+        ControlCommand::CalibrateShaft => {
+            info!("Calibrating shaft");
+            info!("Warming up motor");
+            Some(Powered(EncoderCalibration(WarmUp(
+                Angle::<Electrical>::zero(),
             ))))
         }
         ControlCommand::SetTargetZero => todo!(),

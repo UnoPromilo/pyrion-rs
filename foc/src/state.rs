@@ -3,7 +3,7 @@ use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::Instant;
 use shared::units::angle::{AngleAny, Electrical, Mechanical};
-use shared::units::{Angle, Current, Direction, Velocity, Voltage};
+use shared::units::{Angle, Current, Velocity, Voltage};
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
@@ -19,24 +19,33 @@ pub struct ShaftData {
     pub angle: AngleAny,
     pub electrical_angle: Angle<Electrical>,
     pub measure_time: Instant,
-    pub encoder_calibration: EncoderCalibrationConstants,
+    pub shaft_calibration: ShaftCalibrationConstants,
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
-pub struct EncoderCalibrationConstants {
-    pub direction: Direction,
-    pub offset: u16,
-    pub pole_pairs: u16,
+pub struct ShaftCalibrationConstants {
+    pub offset: Angle<Electrical>,
+    pub pole_pairs: i16,
 }
 
-impl Default for EncoderCalibrationConstants {
+impl Default for ShaftCalibrationConstants {
     fn default() -> Self {
         Self {
-            direction: Direction::Clockwise,
-            offset: 0,
+            offset: Angle::zero(),
             pole_pairs: 1,
         }
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for ShaftCalibrationConstants {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "ShaftCalibrationConstants {{ pole_pairs: {}, offset: {} }}",
+            self.pole_pairs,
+            self.offset,
+        );
     }
 }
 
@@ -82,21 +91,21 @@ pub enum CalibratingCurrentSensorState {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
 pub enum Powered {
-    Measuring(MeasurementState),
+    EncoderCalibration(EncoderCalibrationState),
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
-pub enum MeasurementState {
-    Direction(Angle<Electrical>),
-    MagneticPoles(Angle<Electrical>, u8),
-    MagneticOffset(Angle<Electrical>),
+pub enum EncoderCalibrationState {
+    WarmUp(Angle<Electrical>),
+    Measuring(Angle<Electrical>, u8),
+    Return(Angle<Electrical>, u8),
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
 pub enum ControlCommand {
-    CalibrateEncoder,
+    CalibrateShaft,
     SetTargetZero,
     SetTargetVoltage(Voltage),
     SetTargetTorque(Current),

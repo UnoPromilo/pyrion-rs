@@ -1,4 +1,4 @@
-use shared::fixed::types::I16F16;
+use fixed::types::I16F16;
 
 const SQRT3_OVER_2: I16F16 = I16F16::lit("0.86602540378");
 

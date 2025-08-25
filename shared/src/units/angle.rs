@@ -1,9 +1,9 @@
-use crate::units::Direction;
 use crate::units::cos_lut::COS_LUT;
 use core::marker::PhantomData;
 use core::str::FromStr;
+use defmt::Formatter;
 use fixed::ParseFixedError;
-use fixed::types::{I1F15, U16F16};
+use fixed::types::{I1F15, U3F29, U16F16, U16F48};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Electrical;
@@ -15,7 +15,6 @@ pub trait AngleType {}
 impl AngleType for Electrical {}
 impl AngleType for Mechanical {}
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 
 pub struct Angle<T: AngleType> {
@@ -23,11 +22,38 @@ pub struct Angle<T: AngleType> {
     _kind: PhantomData<T>,
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg(feature = "defmt")]
+impl<T: AngleType> defmt::Format for Angle<T> {
+    fn format(&self, fmt: Formatter) {
+        defmt::write!(
+            fmt,
+            "Angle ({} deg)",
+            self.as_degrees().to_num::<f32>(),
+        );
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum AngleAny {
     Electrical(Angle<Electrical>),
     Mechanical(Angle<Mechanical>),
+}
+#[cfg(feature = "defmt")]
+impl defmt::Format for AngleAny {
+    fn format(&self, fmt: Formatter) {
+        match self {
+            AngleAny::Electrical(value) => defmt::write!(
+                fmt,
+                "Electrical ({} deg)",
+                value.as_degrees().to_num::<f32>(),
+            ),
+            AngleAny::Mechanical(value) => defmt::write!(
+                fmt,
+                "Mechanical ({} deg)",
+                value.as_degrees().to_num::<f32>(),
+            ),
+        }
+    }
 }
 
 impl<T: AngleType> Angle<T> {
@@ -38,25 +64,17 @@ impl<T: AngleType> Angle<T> {
         }
     }
 
-    /// Returns always the smallest distance between two angles, always positive, wraps 360->0
-    pub fn get_abs(&self, other: &Self) -> Self {
-        let diff = self.raw_angle.wrapping_sub(other.raw_angle);
-        let dist = diff.min(u16::MAX - diff);
+    pub const fn max() -> Self {
         Self {
-            raw_angle: dist,
+            raw_angle: u16::MAX,
             _kind: PhantomData,
         }
     }
 
-    pub fn get_direction(&self, other: &Self) -> Option<Direction> {
-        let diff = other.raw_angle.wrapping_sub(self.raw_angle);
-
-        const HALF: u16 = u16::MAX / 2;
-
-        match diff {
-            0 => None,
-            1..HALF => Some(Direction::CounterClockwise),
-            HALF..=u16::MAX => Some(Direction::Clockwise),
+    pub const fn zero() -> Self {
+        Self {
+            raw_angle: 0,
+            _kind: PhantomData,
         }
     }
 
@@ -84,7 +102,7 @@ impl<T: AngleType> Angle<T> {
         const MAX_DEGREES: U16F16 = U16F16::lit("360");
         debug_assert!(degrees < MAX_DEGREES);
         //  65535 / 360
-        const SCALE: U16F16 = U16F16::lit("18.4087078652");
+        const SCALE: U16F16 = U16F16::lit("182.04166666667");
         let scaled = degrees * SCALE;
         Self {
             raw_angle: scaled.to_num::<u16>(),
@@ -98,8 +116,32 @@ impl<T: AngleType> Angle<T> {
         U16F16::from_num(self.raw_angle) * SCALE
     }
 
+    pub fn from_rad(rad: U3F29) -> Self {
+        const MAX_RAD: U3F29 = U3F29::lit("6.283185307179586477");
+        debug_assert!(rad < MAX_RAD);
+        // 65535 / 6.283185307179586477
+        const SCALE: U16F48 = U16F48::lit("10430.21919552736082948");
+        let scaled = rad.to_num::<U16F48>() * SCALE;
+        Self {
+            raw_angle: scaled.to_num::<u16>(),
+            _kind: PhantomData,
+        }
+    }
+
+    pub fn as_rad(&self) -> U3F29 {
+        const SCALE: U16F48 = U16F48::lit("0.00009587526218");
+        (U16F48::from_num(self.raw_angle) * SCALE).to_num()
+    }
+
     pub fn checked_add(&self, other: &Self) -> Option<Self> {
         self.raw_angle.checked_add(other.raw_angle).map(|raw| Self {
+            raw_angle: raw,
+            _kind: PhantomData,
+        })
+    }
+
+    pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+        self.raw_angle.checked_sub(other.raw_angle).map(|raw| Self {
             raw_angle: raw,
             _kind: PhantomData,
         })
@@ -128,13 +170,30 @@ impl<T: AngleType> Angle<T> {
 }
 
 impl Angle<Electrical> {
-    pub fn from(angle: &Angle<Mechanical>, offset: u16, pole_pairs: u16) -> Self {
-        Self::from_raw(
-            angle
-                .raw_angle
-                .wrapping_sub(offset)
-                .wrapping_mul(pole_pairs),
-        )
+    // TODO write this without if
+    pub fn from_mechanical(
+        angle: &Angle<Mechanical>,
+        offset: &Angle<Electrical>,
+        pole_pairs: i16,
+    ) -> Self {
+        if pole_pairs > 0 {
+            let pole_pairs = pole_pairs as u16;
+            Self::from_raw(
+                angle
+                    .raw_angle
+                    .wrapping_sub(offset.raw_angle)
+                    .wrapping_mul(pole_pairs),
+            )
+        } else {
+            let pole_pairs = (-pole_pairs) as u16;
+            Self::from_raw(
+                angle
+                    .raw_angle
+                    .wrapping_sub(offset.raw_angle)
+                    .wrapping_mul(pole_pairs),
+            )
+            .inverted()
+        }
     }
 }
 
@@ -165,54 +224,6 @@ impl From<ParseFixedError> for ParseAngleError {
 mod test {
     use super::*;
     use alloc::vec;
-
-    #[test]
-    fn test_get_difference() {
-        let cases = vec![
-            (0, 20, 20),
-            (20, 10, 10),
-            (340, 20, 40),
-            (20, 345, 35),
-            (359, 359, 0),
-        ];
-
-        for (from, to, expected) in cases {
-            let a1 = Angle::<Electrical>::from_degrees(U16F16::from_num(from));
-            let a2 = Angle::from_degrees(U16F16::from_num(to));
-            let actual1 = a1.get_abs(&a2).as_degrees();
-            let actual2 = a2.get_abs(&a1).as_degrees();
-            assert_close(expected, actual1.to_num());
-            assert_close(expected, actual2.to_num());
-        }
-    }
-
-    #[test]
-    fn test_get_direction() {
-        use Direction::*;
-
-        let cases = vec![
-            (0, 0, None),
-            (0, 1, Some(CounterClockwise)),
-            (0, 179, Some(CounterClockwise)),
-            (0, 180, Some(Clockwise)), // exactly 180°, defined as CW in impl
-            (0, 181, Some(Clockwise)),
-            (359, 0, Some(CounterClockwise)), // wraparound
-            (0, 359, Some(Clockwise)),        // wraparound the other way
-            (90, 270, Some(Clockwise)),
-            (270, 90, Some(Clockwise)), // exactly 180°, defined as CW in impl
-        ];
-
-        for (from_deg, to_deg, expected) in cases {
-            let from = Angle::<Mechanical>::from_degrees(U16F16::from_num(from_deg));
-            let to = Angle::from_degrees(U16F16::from_num(to_deg));
-            let result = from.get_direction(&to);
-            assert_eq!(
-                result, expected,
-                "Angle::get_direction({from_deg}, {to_deg}) = {:?}, expected {:?}",
-                result, expected
-            );
-        }
-    }
 
     #[test]
     fn test_sin_cos_variants() {
@@ -287,12 +298,13 @@ mod test {
         ];
 
         for (raw_mech, offset, pole_pairs, expected) in cases {
+            let offset = Angle::<Electrical>::from_raw(offset);
             let mechanical = Angle::<Mechanical>::from_raw(raw_mech);
-            let electrical = Angle::<Electrical>::from(&mechanical, offset, pole_pairs);
+            let electrical = Angle::<Electrical>::from_mechanical(&mechanical, &offset, pole_pairs);
             assert_eq!(
                 electrical.raw_angle, expected,
                 "Failed for mech={}, offset={}, pole_pairs={}",
-                raw_mech, offset, pole_pairs
+                raw_mech, offset.raw_angle, pole_pairs
             );
         }
     }
@@ -301,18 +313,5 @@ mod test {
         let tolerance = I1F15::from_num(0.008);
         let diff = a.wrapping_dist(b);
         diff <= tolerance
-    }
-
-    fn assert_close(expected: u16, actual: u16) {
-        const TOLERANCE: u16 = 1;
-        let diff = (expected as i32 - actual as i32).abs();
-        assert!(
-            diff <= TOLERANCE as i32,
-            "expected {}, got {}, diff {} > tolerance {}",
-            expected,
-            actual,
-            diff,
-            TOLERANCE
-        );
     }
 }

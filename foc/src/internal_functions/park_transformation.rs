@@ -1,4 +1,4 @@
-use shared::fixed::types::I16F16;
+use fixed::types::I16F16;
 use shared::units::Angle;
 use shared::units::angle::Electrical;
 
@@ -18,7 +18,7 @@ pub fn inverse(i_d: i16, i_q: i16, electrical_angle: &Angle<Electrical>) -> (i16
 mod tests {
     use super::*;
     use core::f32::consts::FRAC_1_SQRT_2;
-    use shared::fixed::types::U16F16;
+    use fixed::types::U16F16;
 
     const TOLERANCE: i16 = 4;
 
