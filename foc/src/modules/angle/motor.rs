@@ -1,14 +1,15 @@
 use crate::Motor;
 use crate::angle::calibration_accumulator::CalibrationAccumulator;
-use crate::state::EncoderCalibrationState::Measuring;
+use crate::state::EncoderCalibrationState::{MeasuringFast, MeasuringSlow};
 use crate::state::MotorState::Powered;
 use crate::state::Powered::EncoderCalibration;
-use crate::state::{ShaftCalibrationConstants, MotorState, ShaftData};
+use crate::state::{MotorState, ShaftCalibrationConstants, ShaftData};
+use embassy_time::Duration;
 use embassy_time::Instant;
 use hardware_abstraction::angle_sensor::AngleReader;
-use shared::info;
 use shared::units::Angle;
 use shared::units::angle::{AngleAny, Electrical};
+use shared::{error, info};
 
 impl Motor {
     pub async fn update_angle_task<R: AngleReader>(
@@ -31,7 +32,8 @@ impl Motor {
     ) -> Result<(), R::Error> {
         let mut last_cmd: Option<Angle<Electrical>> = None;
 
-        let mut accumulator = CalibrationAccumulator::<16>::new();
+        let mut accumulator_slow = CalibrationAccumulator::<16>::new();
+        let mut accumulator_fast = CalibrationAccumulator::<16>::new();
 
         loop {
             let current_angle = angle_reader.read_angle().await?;
@@ -42,14 +44,29 @@ impl Motor {
                 AngleAny::Electrical(_) => return Ok(()),
             };
 
-            if let Powered(EncoderCalibration(Measuring(current_cmd, _))) = self.get_state().await {
+            if let Powered(EncoderCalibration(MeasuringSlow(current_cmd, _))) =
+                self.get_state().await
+            {
                 if Some(current_cmd) == last_cmd {
                     embassy_futures::yield_now().await;
                     continue;
                 }
 
                 if let Some(last_cmd) = last_cmd {
-                    accumulator.add_sample(&last_cmd, &current_mech);
+                    accumulator_slow.add_sample(&last_cmd, &current_mech);
+                }
+
+                last_cmd = Some(current_cmd);
+            } else if let Powered(EncoderCalibration(MeasuringFast(current_cmd, _))) =
+                self.get_state().await
+            {
+                if Some(current_cmd) == last_cmd {
+                    embassy_futures::yield_now().await;
+                    continue;
+                }
+
+                if let Some(last_cmd) = last_cmd {
+                    accumulator_fast.add_sample(&last_cmd, &current_mech);
                 }
 
                 last_cmd = Some(current_cmd);
@@ -61,16 +78,49 @@ impl Motor {
                     None => return Ok(()),
                 };
 
-                let result = accumulator.finalize();
+                let result_slow = accumulator_slow.finalize();
+                let result_fast = accumulator_fast.finalize();
 
-                let shaft_calibration = ShaftCalibrationConstants {
-                    pole_pairs: result.pole_pairs,
-                    offset: result.offset,
+                info!("Fast calibration offset: {}", result_fast.offset);
+                info!("Slow calibration offset: {}", result_slow.offset);
+                info!("Fast coherence {}", result_fast.coherence.to_num::<f32>());
+                info!("Slow coherence {}", result_slow.coherence.to_num::<f32>());
+
+                let offset_delta = result_fast.offset.checked_sub(&result_slow.offset);
+
+                let offset_delta = if let Some(value) = offset_delta {
+                    value
+                } else {
+                    error!("Failed to calculate latency, try again");
+                    return Ok(());
                 };
 
+                // TODO have single constant for state machine and motor
+                const SPEED_SLOW: u64 = 128 * 2; // 256 of 'raws' per millisecond
+                const SPEED_FAST: u64 = 512 * 2; // 1024 of 'raws' per millisecond
+
+                const SPEED_DELTA: u64 = SPEED_FAST - SPEED_SLOW;
+                let latency_micro = offset_delta.raw() as u64 * 1000 / SPEED_DELTA;
+                let latency = Duration::from_micros(latency_micro);
+
+                let error_slow = Angle::from_raw((latency_micro * SPEED_SLOW / 1000) as u16);
+
+                let offset = result_slow.offset.checked_sub(&error_slow);
+
+                let offset = if let Some(value) = offset {
+                    value
+                } else {
+                    error!("Failed to calculate offset, try again");
+                    return Ok(());
+                };
+
+                let shaft_calibration = ShaftCalibrationConstants {
+                    pole_pairs: result_slow.pole_pairs,
+                    offset,
+                    measurement_delay: latency,
+                };
 
                 info!("New shaft calibration: {}", shaft_calibration);
-                info!("Coherence {}", result.coherence.to_num::<f32>());
 
                 *shaft_data_guard = Some(ShaftData {
                     shaft_calibration,
@@ -93,13 +143,11 @@ impl Motor {
         let measure_time = Instant::now();
         let electrical_angle = match angle {
             AngleAny::Electrical(value) => value,
-            AngleAny::Mechanical(value) => {
-                Angle::<Electrical>::from_mechanical(
-                    &value,
-                    &calibration.offset,
-                    calibration.pole_pairs,
-                )
-            }
+            AngleAny::Mechanical(value) => Angle::<Electrical>::from_mechanical(
+                &value,
+                &calibration.offset,
+                calibration.pole_pairs,
+            ),
         };
 
         *shaft_data_guard = Some(ShaftData {
@@ -117,7 +165,7 @@ impl Motor {
     async fn is_measuring_direction(&self) -> bool {
         matches!(
             self.get_state().await,
-            Powered(EncoderCalibration(Measuring(_, _)))
+            Powered(EncoderCalibration(MeasuringSlow(_, _)))
         )
     }
 }

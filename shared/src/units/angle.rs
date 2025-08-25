@@ -25,11 +25,7 @@ pub struct Angle<T: AngleType> {
 #[cfg(feature = "defmt")]
 impl<T: AngleType> defmt::Format for Angle<T> {
     fn format(&self, fmt: Formatter) {
-        defmt::write!(
-            fmt,
-            "Angle ({} deg)",
-            self.as_degrees().to_num::<f32>(),
-        );
+        defmt::write!(fmt, "Angle ({} °)", self.as_degrees().to_num::<f32>());
     }
 }
 
@@ -42,16 +38,12 @@ pub enum AngleAny {
 impl defmt::Format for AngleAny {
     fn format(&self, fmt: Formatter) {
         match self {
-            AngleAny::Electrical(value) => defmt::write!(
-                fmt,
-                "Electrical ({} deg)",
-                value.as_degrees().to_num::<f32>(),
-            ),
-            AngleAny::Mechanical(value) => defmt::write!(
-                fmt,
-                "Mechanical ({} deg)",
-                value.as_degrees().to_num::<f32>(),
-            ),
+            AngleAny::Electrical(value) => {
+                defmt::write!(fmt, "Electrical ({}°)", value.as_degrees().to_num::<f32>(),)
+            }
+            AngleAny::Mechanical(value) => {
+                defmt::write!(fmt, "Mechanical ({}°)", value.as_degrees().to_num::<f32>(),)
+            }
         }
     }
 }
@@ -166,6 +158,10 @@ impl<T: AngleType> Angle<T> {
             raw_angle: u16::MAX - self.raw_angle,
             _kind: PhantomData,
         }
+    }
+
+    pub fn raw(&self) -> u16 {
+        self.raw_angle
     }
 }
 

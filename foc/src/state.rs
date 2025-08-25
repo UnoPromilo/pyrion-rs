@@ -1,7 +1,7 @@
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
-use embassy_time::Instant;
+use embassy_time::{Duration, Instant};
 use shared::units::angle::{AngleAny, Electrical, Mechanical};
 use shared::units::{Angle, Current, Velocity, Voltage};
 
@@ -26,6 +26,7 @@ pub struct ShaftData {
 pub struct ShaftCalibrationConstants {
     pub offset: Angle<Electrical>,
     pub pole_pairs: i16,
+    pub measurement_delay: Duration,
 }
 
 impl Default for ShaftCalibrationConstants {
@@ -33,6 +34,7 @@ impl Default for ShaftCalibrationConstants {
         Self {
             offset: Angle::zero(),
             pole_pairs: 1,
+            measurement_delay: Duration::from_secs(0),
         }
     }
 }
@@ -42,9 +44,10 @@ impl defmt::Format for ShaftCalibrationConstants {
     fn format(&self, fmt: defmt::Formatter) {
         defmt::write!(
             fmt,
-            "ShaftCalibrationConstants {{ pole_pairs: {}, offset: {} }}",
+            "ShaftCalibrationConstants {{ pole_pairs: {}, offset: {}, measurement_delay: {}μs }}",
             self.pole_pairs,
             self.offset,
+            self.measurement_delay.as_micros(),
         );
     }
 }
@@ -98,7 +101,8 @@ pub enum Powered {
 #[derive(Debug, Clone, Copy)]
 pub enum EncoderCalibrationState {
     WarmUp(Angle<Electrical>),
-    Measuring(Angle<Electrical>, u8),
+    MeasuringSlow(Angle<Electrical>, u8),
+    MeasuringFast(Angle<Electrical>, u8),
     Return(Angle<Electrical>, u8),
 }
 
