@@ -4,35 +4,38 @@ use crate::state::{
     CalibratingCurrentSensorState::*, ControlCommand, EncoderCalibrationState::*,
     InitializationState::*, MotorState, MotorState::*, MotorStateSnapshot, Powered::*,
 };
-use embassy_time::Duration;
+use embassy_time::{Duration};
 use hardware_abstraction::motor_driver::MotorDriver;
 use shared::info;
 use shared::units::Angle;
 use shared::units::angle::Electrical;
 
+const STATE_LOOP_FREQUENCY: Duration = Duration::from_hz(2000);
+
 pub async fn on_tick(motor: &Motor, driver: &mut impl MotorDriver) {
     let mut state_snapshot = motor.state.lock().await;
     let duration = state_snapshot.state_set_at.elapsed();
 
-    let next_motor_state = if does_state_allow_command_handling(state_snapshot.state)
-        && let Some(command) = motor.command.try_take()
-        && let Some(new_state) = handle_command(command)
-    {
-        Some(new_state)
-    } else {
-        next_motor_state(state_snapshot.state, duration)
-    };
+    if duration > STATE_LOOP_FREQUENCY {
+        let next_motor_state = if does_state_allow_command_handling(state_snapshot.state)
+            && let Some(command) = motor.command.try_take()
+            && let Some(new_state) = handle_command(command)
+        {
+            Some(new_state)
+        } else {
+            next_motor_state(state_snapshot.state, duration)
+        };
 
-    if let Some(next_state) = next_motor_state {
-        apply_state_transition(next_state, state_snapshot.state, driver);
-        *state_snapshot = MotorStateSnapshot::new(next_state);
+        if let Some(next_state) = next_motor_state {
+            apply_state_transition(next_state, state_snapshot.state, driver);
+            *state_snapshot = MotorStateSnapshot::new(next_state);
+        }
     }
 }
 
 fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState> {
     const INITIAL_DEAD_TIME: Duration = Duration::from_millis(500);
     const CURRENT_SENSOR_PHASE_CALIBRATION_TIME: Duration = Duration::from_millis(100);
-    const MEASUREMENT_STEP_TIME: Duration = Duration::from_hz(2000);
 
     // TODO have single constant for state machine and motor
     const ENCODER_CALIBRATION_STEP_SLOW: Angle<Electrical> = Angle::<Electrical>::from_raw(128); // Around 2 degrees
@@ -55,7 +58,7 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
         }
         Initializing(CalibratingCurrentSensor(_)) => None,
         Idle => None,
-        Powered(EncoderCalibration(measurement)) if elapsed > MEASUREMENT_STEP_TIME => {
+        Powered(EncoderCalibration(measurement)) => {
             match measurement {
                 WarmUp(current_angle) => {
                     if let Some(new_angle) =
@@ -138,7 +141,6 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
                 }
             }
         }
-        Powered(EncoderCalibration(_)) => None,
     }
 }
 
