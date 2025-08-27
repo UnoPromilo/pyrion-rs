@@ -13,9 +13,9 @@ pub enum RawOutput {
 pub trait CurrentReader {
     type Error: core::fmt::Debug;
 
-    async fn read(&mut self) -> Result<Output, Self::Error>;
+    async fn wait_for_next(&mut self) -> Result<Output, Self::Error>;
 
-    async fn read_raw(&mut self) -> Result<RawOutput, Self::Error>;
+    async fn wait_for_next_raw(&mut self) -> Result<RawOutput, Self::Error>;
 
     async fn calibrate_current(&mut self, zero_a: u16, zero_b: u16, zero_c: u16);
 }

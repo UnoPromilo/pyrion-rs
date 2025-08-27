@@ -1,27 +1,18 @@
 use crate::Motor;
+use crate::current::calibration_accumulator::CalibrationAccumulator;
 use crate::state::InitializationState::CalibratingCurrentSensor;
 use crate::state::MotorState::Initializing;
 use crate::state::PhaseCurrent;
-use embassy_sync::blocking_mutex::raw::RawMutex;
-use embassy_sync::signal::Signal;
-use embassy_time::Instant;
 use hardware_abstraction::current_sensor;
 use hardware_abstraction::current_sensor::CurrentReader;
-use shared::debug;
-use crate::current::calibration_accumulator::CalibrationAccumulator;
+use shared::{debug, warn};
 
 impl Motor {
-    pub async fn update_current_task<R: CurrentReader, M: RawMutex>(
+    pub async fn update_current_task<R: CurrentReader>(
         &self,
-        pwm_wrap_signal: &Signal<M, Instant>,
         current_reader: &mut R,
     ) -> Result<(), R::Error> {
         loop {
-            let time_of_wrap = pwm_wrap_signal.wait().await;
-            if (time_of_wrap.elapsed().as_ticks() as u32) > 10 {
-                // 10 ticks is too late for accurate measurement, it is better to skip it.
-                continue;
-            }
             if self.is_calibrating().await {
                 let mut calibration_accumulator = CalibrationAccumulator::default();
                 let mut sample_count = 0u32;
@@ -30,7 +21,7 @@ impl Motor {
                     let state = { self.state.lock().await.state };
                     match state {
                         Initializing(CalibratingCurrentSensor(cal_state)) => {
-                            let raw_output = current_reader.read_raw().await?;
+                            let raw_output = current_reader.wait_for_next_raw().await?;
                             calibration_accumulator.update(cal_state, raw_output);
                             sample_count += 1;
                         }
@@ -39,16 +30,20 @@ impl Motor {
                 }
                 debug!(
                     "Current sensor calibration was based on {} samples",
-                    sample_count
+                    sample_count,
                 );
                 let (a, b, c) = calibration_accumulator.finalize();
                 current_reader.calibrate_current(a, b, c).await;
             }
 
-            let output = current_reader.read().await?;
+            let output = current_reader.wait_for_next().await?;
             let phase_current = PhaseCurrent::from_output(output);
 
-            *self.current.lock().await = Some(phase_current);
+            if let Ok(mut current_mutex) = self.current.try_lock() {
+                *current_mutex = Some(phase_current);
+            } else {
+                warn!("Skipping the current update because motor is busy")
+            }
         }
     }
 

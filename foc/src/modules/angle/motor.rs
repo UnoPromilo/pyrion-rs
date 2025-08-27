@@ -22,7 +22,7 @@ impl Motor {
             }
 
             let angle = angle_reader.read_angle().await?;
-            self.store_shaft_date(angle).await;
+            self.store_shaft_data(angle).await;
         }
     }
 
@@ -37,7 +37,7 @@ impl Motor {
 
         loop {
             let current_angle = angle_reader.read_angle().await?;
-            self.store_shaft_date(current_angle.clone()).await;
+            self.store_shaft_data(current_angle.clone()).await;
 
             let current_mech = match current_angle {
                 AngleAny::Mechanical(value) => value,
@@ -71,11 +71,12 @@ impl Motor {
 
                 last_cmd = Some(current_cmd);
             } else {
-                let mut shaft_data_guard = self.shaft.lock().await;
-
-                let old_shaft_data = match &*shaft_data_guard {
-                    Some(data) => data.clone(),
-                    None => return Ok(()),
+                let old_shaft_data = {
+                    let shaft_data_guard = self.shaft.lock().await;
+                    match &*shaft_data_guard {
+                        Some(data) => data.clone(),
+                        None => return Ok(()),
+                    }
                 };
 
                 let result_slow = accumulator_slow.finalize();
@@ -122,17 +123,20 @@ impl Motor {
 
                 info!("New shaft calibration: {}", shaft_calibration);
 
-                *shaft_data_guard = Some(ShaftData {
-                    shaft_calibration,
-                    ..old_shaft_data
-                });
+                {
+                    let mut shaft_data_guard = self.shaft.lock().await;
+                    *shaft_data_guard = Some(ShaftData {
+                        shaft_calibration,
+                        ..old_shaft_data
+                    });
+                }
 
                 return Ok(());
             }
         }
     }
 
-    async fn store_shaft_date(&self, angle: AngleAny) {
+    async fn store_shaft_data(&self, angle: AngleAny) {
         let mut shaft_data_guard = self.shaft.lock().await;
 
         let calibration = shaft_data_guard

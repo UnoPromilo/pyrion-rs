@@ -27,7 +27,6 @@ pub struct MotorConfig {
 
 pub struct CurrentConfig {
     pub adc: Peri<'static, ADC>,
-    pub dma: Peri<'static, DMA_CH2>,
     pub phase_a: Peri<'static, PIN_26>,
     pub phase_b: Peri<'static, PIN_27>,
     pub phase_c: Peri<'static, PIN_28>,
@@ -78,7 +77,6 @@ impl HardwareConfig {
             },
             current: Some(CurrentConfig {
                 adc: p.ADC,
-                dma: p.DMA_CH2,
                 phase_a: p.PIN_26,
                 phase_b: p.PIN_27,
                 phase_c: p.PIN_28,
