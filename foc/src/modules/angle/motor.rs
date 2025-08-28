@@ -1,15 +1,17 @@
 use crate::Motor;
 use crate::angle::calibration_accumulator::CalibrationAccumulator;
-use crate::state::EncoderCalibrationState::{MeasuringFast, MeasuringSlow};
+use crate::state::ShaftCalibrationState::{MeasuringFast, MeasuringSlow};
 use crate::state::MotorState::Powered;
-use crate::state::Powered::EncoderCalibration;
+use crate::state::Powered::ShaftCalibration;
 use crate::state::{MotorState, ShaftCalibrationConstants, ShaftData};
 use embassy_time::Duration;
 use embassy_time::Instant;
+use fixed::types::U1F15;
 use hardware_abstraction::angle_sensor::AngleReader;
-use shared::units::Angle;
 use shared::units::angle::{AngleAny, Electrical};
+use shared::units::{Angle, Velocity};
 use shared::{error, info};
+use shared::units::low_pass_filter::LowPassFilter;
 
 impl Motor {
     pub async fn update_angle_task<R: AngleReader>(
@@ -17,8 +19,8 @@ impl Motor {
         angle_reader: &mut R,
     ) -> Result<(), R::Error> {
         loop {
-            if self.is_measuring_direction().await {
-                self.start_direction_calibration(angle_reader).await?;
+            if self.is_calibrating_shaft().await {
+                self.calibrate_shaft(angle_reader).await?;
             }
 
             let angle = angle_reader.read_angle().await?;
@@ -26,10 +28,7 @@ impl Motor {
         }
     }
 
-    async fn start_direction_calibration<R: AngleReader>(
-        &self,
-        angle_reader: &mut R,
-    ) -> Result<(), R::Error> {
+    async fn calibrate_shaft<R: AngleReader>(&self, angle_reader: &mut R) -> Result<(), R::Error> {
         let mut last_cmd: Option<Angle<Electrical>> = None;
 
         let mut accumulator_slow = CalibrationAccumulator::<16>::new();
@@ -44,8 +43,7 @@ impl Motor {
                 AngleAny::Electrical(_) => return Ok(()),
             };
 
-            if let Powered(EncoderCalibration(MeasuringSlow(current_cmd, _))) =
-                self.get_state().await
+            if let Powered(ShaftCalibration(MeasuringSlow(current_cmd, _))) = self.get_state().await
             {
                 if Some(current_cmd) == last_cmd {
                     embassy_futures::yield_now().await;
@@ -57,7 +55,7 @@ impl Motor {
                 }
 
                 last_cmd = Some(current_cmd);
-            } else if let Powered(EncoderCalibration(MeasuringFast(current_cmd, _))) =
+            } else if let Powered(ShaftCalibration(MeasuringFast(current_cmd, _))) =
                 self.get_state().await
             {
                 if Some(current_cmd) == last_cmd {
@@ -147,11 +145,19 @@ impl Motor {
         let measure_time = Instant::now();
         let electrical_angle = match angle {
             AngleAny::Electrical(value) => value,
-            AngleAny::Mechanical(value) => Angle::<Electrical>::from_mechanical(
-                &value,
-                &calibration.offset,
-                calibration.pole_pairs,
-            ),
+            AngleAny::Mechanical(value) => {
+                value.to_electrical(&calibration.offset, calibration.pole_pairs)
+            }
+        };
+        let speed = match shaft_data_guard.as_ref() {
+            None => Velocity::<Electrical>::ZERO,
+            Some(old_data) => {
+                let old_speed = old_data.filtered_velocity;
+                let angle_delta = electrical_angle.overflowing_sub(&old_data.electrical_angle);
+                let time_delta = measure_time - old_data.measure_time;
+                let speed = angle_delta / time_delta;
+                old_speed.low_pass_filter(speed, U1F15::lit("0.01"))
+            }
         };
 
         *shaft_data_guard = Some(ShaftData {
@@ -159,6 +165,7 @@ impl Motor {
             electrical_angle,
             measure_time,
             shaft_calibration: calibration,
+            filtered_velocity: speed,
         });
     }
 
@@ -166,10 +173,10 @@ impl Motor {
         self.state.lock().await.state
     }
 
-    async fn is_measuring_direction(&self) -> bool {
+    async fn is_calibrating_shaft(&self) -> bool {
         matches!(
             self.get_state().await,
-            Powered(EncoderCalibration(MeasuringSlow(_, _)))
+            Powered(ShaftCalibration(MeasuringSlow(_, _)))
         )
     }
 }

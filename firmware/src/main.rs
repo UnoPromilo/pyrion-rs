@@ -3,7 +3,9 @@
 
 use crate::angle_sensor::update_angle_task;
 use crate::config::{AngleSensorConfig, HardwareConfig, I2cConfig, MotorConfig, UartConfig};
-use crate::current_sensor::{ThreePhaseCurrentReader, ThreePhaseCurrentTrigger, setup_current_sensor, update_current_task};
+use crate::current_sensor::{
+    ThreePhaseCurrentReader, ThreePhaseCurrentTrigger, setup_current_sensor, update_current_task,
+};
 use crate::i2c::init_i2c;
 use crate::motor_driver::drive_motor_task;
 use crate::serial::read_from_serial_task;
@@ -11,7 +13,10 @@ use embassy_executor::{Executor, Spawner};
 use embassy_rp::multicore::Stack;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
+use embassy_time::{Duration, Ticker};
 use foc::Motor;
+use shared::units::Velocity;
+use shared::units::angle::Electrical;
 use static_cell::StaticCell;
 #[allow(unused_imports)]
 use {defmt_rtt as _, panic_probe as _};
@@ -87,10 +92,33 @@ async fn core0_task(
 }
 
 #[embassy_executor::task]
-async fn core1_task(spawner: Spawner, motor: &'static Motor, reader: ThreePhaseCurrentReader<'static>) {
+async fn core1_task(
+    spawner: Spawner,
+    motor: &'static Motor,
+    reader: ThreePhaseCurrentReader<'static>,
+) {
     spawner.must_spawn(update_current_task(&motor, reader))
 }
 
 fn init_motor() -> &'static Motor {
     MOTOR.init(Motor::new())
+}
+
+#[allow(dead_code)]
+#[embassy_executor::task]
+async fn cyclic_logger(motor: &'static Motor) {
+    let mut ticker = Ticker::every(Duration::from_millis(100));
+
+    loop {
+        ticker.next().await;
+        defmt::info!(
+            "{:?}",
+            motor
+                .snapshot()
+                .await
+                .shaft
+                .map(|s| s.filtered_velocity)
+                .unwrap_or(Velocity::<Electrical>::ZERO)
+        );
+    }
 }

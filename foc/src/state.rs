@@ -20,6 +20,7 @@ pub struct ShaftData {
     pub electrical_angle: Angle<Electrical>,
     pub measure_time: Instant,
     pub shaft_calibration: ShaftCalibrationConstants,
+    pub filtered_velocity: Velocity<Electrical>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -94,12 +95,12 @@ pub enum CalibratingCurrentSensorState {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
 pub enum Powered {
-    EncoderCalibration(EncoderCalibrationState),
+    ShaftCalibration(ShaftCalibrationState),
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
-pub enum EncoderCalibrationState {
+pub enum ShaftCalibrationState {
     WarmUp(Angle<Electrical>),
     MeasuringSlow(Angle<Electrical>, u8),
     MeasuringFast(Angle<Electrical>, u8),
@@ -113,7 +114,7 @@ pub enum ControlCommand {
     SetTargetZero,
     SetTargetVoltage(Voltage),
     SetTargetTorque(Current),
-    SetTargetVelocity(Velocity),
+    SetTargetVelocity(Velocity<Mechanical>),
     SetTargetPosition(Angle<Mechanical>),
 }
 

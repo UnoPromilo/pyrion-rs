@@ -17,8 +17,10 @@ const DESIRED_FREQ: u32 = 30_000;
 const PWM_PERIOD: i32 = (CLOCK_FREQUENCY / DESIRED_FREQ / 2) as i32;
 const HALF_DEAD_TIME: i32 = (CLOCK_FREQUENCY as i32) * 5 / 10_000_000; // ~500ns
 
-static TRIGGER: Mutex<CriticalSectionRawMutex, RefCell<Option<ThreePhaseCurrentTrigger<'static, 'static>>>> =
-    Mutex::new(RefCell::new(None));
+static TRIGGER: Mutex<
+    CriticalSectionRawMutex,
+    RefCell<Option<ThreePhaseCurrentTrigger<'static, 'static>>>,
+> = Mutex::new(RefCell::new(None));
 
 pub struct MotorDriver<'d> {
     a: Pwm<'d>,
@@ -234,10 +236,7 @@ pub async fn drive_motor_task(
         None => MotorDriver::new(hardware_config),
         Some(trigger) => MotorDriver::new_with_trigger(hardware_config, trigger),
     };
-    loop {
-        foc::state_machine::on_tick(motor, &mut motor_driver).await;
-        embassy_futures::yield_now().await;
-    }
+    foc::state_machine::state_machine_task(motor, &mut motor_driver).await;
 }
 
 fn setup_interrupt(slice_index: usize) {

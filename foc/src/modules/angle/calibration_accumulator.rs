@@ -1,7 +1,7 @@
-use fixed::types::{I1F15, I3F29, I16F48};
+use fixed::types::{I16F48, I1F15, I3F29};
 use shared::functions::atan::atan2;
-use shared::units::Angle;
 use shared::units::angle::{Electrical, Mechanical};
+use shared::units::Angle;
 
 pub struct CalibrationAccumulator<const P_MAX: usize> {
     sums_cw: [(I16F48, I16F48); P_MAX],
@@ -35,15 +35,11 @@ impl<const P_MAX: usize> CalibrationAccumulator<P_MAX> {
         self.count += 1;
 
         for pairs in 1..=P_MAX {
-            let phase_error_clockwise = angle_electrical.overflowing_sub(&Angle::from_mechanical(
-                angle_mechanical,
-                &ZERO_ANGLE,
-                pairs as i16,
-            ));
+            let phase_error_clockwise = angle_electrical
+                .overflowing_sub(&angle_mechanical.to_electrical(&ZERO_ANGLE, pairs as i16));
 
-            let phase_error_counter_clockwise = angle_electrical.overflowing_sub(
-                &Angle::from_mechanical(angle_mechanical, &ZERO_ANGLE, -(pairs as i16)),
-            );
+            let phase_error_counter_clockwise = angle_electrical
+                .overflowing_sub(&angle_mechanical.to_electrical(&ZERO_ANGLE, -(pairs as i16)));
 
             let (ref mut sin_cw, ref mut cos_cw) = self.sums_cw[pairs - 1];
             let (ref mut sin_ccw, ref mut cos_ccw) = self.sums_ccw[pairs - 1];
@@ -115,8 +111,8 @@ impl<const P_MAX: usize> CalibrationAccumulator<P_MAX> {
 mod tests {
     use super::*;
     use rand::Rng;
+    use shared::units::angle::Mechanical;
     use shared::units::Angle;
-    use shared::units::angle::{Electrical, Mechanical};
 
     fn run_test_case(true_poles: i16, noise_raw: u16) {
         const P_MAX: usize = 12;
@@ -131,8 +127,7 @@ mod tests {
             }
 
             let mechanical = Angle::<Mechanical>::from_raw(mech_raw);
-            let electrical =
-                Angle::<Electrical>::from_mechanical(&mechanical, &Angle::zero(), true_poles);
+            let electrical = &mechanical.to_electrical(&Angle::zero(), true_poles);
             acc.add_sample(&electrical, &mechanical);
         }
 

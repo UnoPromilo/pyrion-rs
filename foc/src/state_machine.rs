@@ -1,10 +1,10 @@
 use crate::Motor;
 use crate::internal_functions::{clarke_transformation, park_transformation};
 use crate::state::{
-    CalibratingCurrentSensorState::*, ControlCommand, EncoderCalibrationState::*,
+    CalibratingCurrentSensorState::*, ControlCommand, ShaftCalibrationState::*,
     InitializationState::*, MotorState, MotorState::*, MotorStateSnapshot, Powered::*,
 };
-use embassy_time::{Duration};
+use embassy_time::{Duration, Ticker};
 use hardware_abstraction::motor_driver::MotorDriver;
 use shared::info;
 use shared::units::Angle;
@@ -12,11 +12,13 @@ use shared::units::angle::Electrical;
 
 const STATE_LOOP_FREQUENCY: Duration = Duration::from_hz(2000);
 
-pub async fn on_tick(motor: &Motor, driver: &mut impl MotorDriver) {
-    let mut state_snapshot = motor.state.lock().await;
-    let duration = state_snapshot.state_set_at.elapsed();
+pub async fn state_machine_task(motor: &Motor, driver: &mut impl MotorDriver) {
+    let mut ticker = Ticker::every(STATE_LOOP_FREQUENCY);
+    loop {
+        ticker.next().await;
+        let mut state_snapshot = motor.state.lock().await;
+        let duration = state_snapshot.state_set_at.elapsed();
 
-    if duration > STATE_LOOP_FREQUENCY {
         let next_motor_state = if does_state_allow_command_handling(state_snapshot.state)
             && let Some(command) = motor.command.try_take()
             && let Some(new_state) = handle_command(command)
@@ -58,89 +60,74 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
         }
         Initializing(CalibratingCurrentSensor(_)) => None,
         Idle => None,
-        Powered(EncoderCalibration(measurement)) => {
-            match measurement {
-                WarmUp(current_angle) => {
-                    if let Some(new_angle) =
-                        current_angle.checked_add(&ENCODER_CALIBRATION_STEP_SLOW)
-                    {
-                        Some(Powered(EncoderCalibration(WarmUp(new_angle))))
-                    } else {
-                        info!("Measuring...");
-                        Some(Powered(EncoderCalibration(MeasuringSlow(
-                            Angle::<Electrical>::zero(),
-                            0,
-                        ))))
-                    }
-                }
-                MeasuringSlow(current_angle, rotation_count) => {
-                    if let Some(new_angle) =
-                        current_angle.checked_add(&ENCODER_CALIBRATION_STEP_SLOW)
-                    {
-                        Some(Powered(EncoderCalibration(MeasuringSlow(
-                            new_angle,
-                            rotation_count,
-                        ))))
-                    } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
-                        let new_angle =
-                            current_angle.overflowing_add(&ENCODER_CALIBRATION_STEP_SLOW);
-                        Some(Powered(EncoderCalibration(MeasuringSlow(
-                            new_angle,
-                            rotation_count + 1,
-                        ))))
-                    } else {
-                        let new_angle =
-                            current_angle.overflowing_add(&ENCODER_CALIBRATION_STEPS_FAST);
-                        info!("Slow measurement is done!");
-                        info!("Now a little faster");
-                        Some(Powered(EncoderCalibration(MeasuringFast(new_angle, 0))))
-                    }
-                }
-                MeasuringFast(current_angle, rotation_count) => {
-                    if let Some(new_angle) =
-                        current_angle.checked_add(&ENCODER_CALIBRATION_STEPS_FAST)
-                    {
-                        Some(Powered(EncoderCalibration(MeasuringFast(
-                            new_angle,
-                            rotation_count,
-                        ))))
-                    } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
-                        let new_angle =
-                            current_angle.overflowing_add(&ENCODER_CALIBRATION_STEPS_FAST);
-                        Some(Powered(EncoderCalibration(MeasuringFast(
-                            new_angle,
-                            rotation_count + 1,
-                        ))))
-                    } else {
-                        info!("Measuring done!");
-                        info!("Spinning back to the original position");
-                        Some(Powered(EncoderCalibration(Return(
-                            Angle::<Electrical>::max(),
-                            ENCODER_POLES_MEASURING_ROTATIONS * 2 + 1,
-                        ))))
-                    }
-                }
-                Return(current_angle, rotation_count) => {
-                    if let Some(new_angle) =
-                        current_angle.checked_sub(&ENCODER_CALIBRATION_STEPS_FAST)
-                    {
-                        Some(Powered(EncoderCalibration(Return(
-                            new_angle,
-                            rotation_count,
-                        ))))
-                    } else if rotation_count > 0 {
-                        let new_angle =
-                            current_angle.overflowing_sub(&ENCODER_CALIBRATION_STEPS_FAST);
-                        Some(Powered(EncoderCalibration(Return(
-                            new_angle,
-                            rotation_count - 1,
-                        ))))
-                    } else {
-                        Some(Idle)
-                    }
+        Powered(ShaftCalibration(measurement)) => match measurement {
+            WarmUp(current_angle) => {
+                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP_SLOW) {
+                    Some(Powered(ShaftCalibration(WarmUp(new_angle))))
+                } else {
+                    info!("Measuring...");
+                    Some(Powered(ShaftCalibration(MeasuringSlow(
+                        Angle::<Electrical>::zero(),
+                        0,
+                    ))))
                 }
             }
-        }
+            MeasuringSlow(current_angle, rotation_count) => {
+                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP_SLOW) {
+                    Some(Powered(ShaftCalibration(MeasuringSlow(
+                        new_angle,
+                        rotation_count,
+                    ))))
+                } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
+                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEP_SLOW);
+                    Some(Powered(ShaftCalibration(MeasuringSlow(
+                        new_angle,
+                        rotation_count + 1,
+                    ))))
+                } else {
+                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEPS_FAST);
+                    info!("Slow measurement is done!");
+                    info!("Now a little faster");
+                    Some(Powered(ShaftCalibration(MeasuringFast(new_angle, 0))))
+                }
+            }
+            MeasuringFast(current_angle, rotation_count) => {
+                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEPS_FAST)
+                {
+                    Some(Powered(ShaftCalibration(MeasuringFast(
+                        new_angle,
+                        rotation_count,
+                    ))))
+                } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
+                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEPS_FAST);
+                    Some(Powered(ShaftCalibration(MeasuringFast(
+                        new_angle,
+                        rotation_count + 1,
+                    ))))
+                } else {
+                    info!("Measuring done!");
+                    info!("Spinning back to the original position");
+                    Some(Powered(ShaftCalibration(Return(
+                        Angle::<Electrical>::max(),
+                        ENCODER_POLES_MEASURING_ROTATIONS * 2 + 1,
+                    ))))
+                }
+            }
+            Return(current_angle, rotation_count) => {
+                if let Some(new_angle) = current_angle.checked_sub(&ENCODER_CALIBRATION_STEPS_FAST)
+                {
+                    Some(Powered(ShaftCalibration(Return(new_angle, rotation_count))))
+                } else if rotation_count > 0 {
+                    let new_angle = current_angle.overflowing_sub(&ENCODER_CALIBRATION_STEPS_FAST);
+                    Some(Powered(ShaftCalibration(Return(
+                        new_angle,
+                        rotation_count - 1,
+                    ))))
+                } else {
+                    Some(Idle)
+                }
+            }
+        },
     }
 }
 
@@ -180,7 +167,7 @@ fn apply_state_transition(
                 driver.enable_synced();
             }
             match powered {
-                EncoderCalibration(measurement) => match measurement {
+                ShaftCalibration(measurement) => match measurement {
                     WarmUp(angle)
                     | MeasuringSlow(angle, _)
                     | MeasuringFast(angle, _)
@@ -198,7 +185,7 @@ fn does_state_allow_command_handling(current: MotorState) -> bool {
         Uninitialized => false,
         Initializing(_) => false,
         Idle => true,
-        Powered(EncoderCalibration(_)) => false,
+        Powered(ShaftCalibration(_)) => false,
     }
 }
 
@@ -207,7 +194,7 @@ fn handle_command(control_command: ControlCommand) -> Option<MotorState> {
         ControlCommand::CalibrateShaft => {
             info!("Calibrating shaft");
             info!("Warming up motor");
-            Some(Powered(EncoderCalibration(WarmUp(
+            Some(Powered(ShaftCalibration(WarmUp(
                 Angle::<Electrical>::zero(),
             ))))
         }

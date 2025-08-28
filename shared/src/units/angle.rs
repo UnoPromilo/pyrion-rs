@@ -1,7 +1,10 @@
+use crate::units::Velocity;
 use crate::units::cos_lut::COS_LUT;
+use crate::units::velocity::VelocityType;
 use core::marker::PhantomData;
+use core::ops::Div;
 use core::str::FromStr;
-use defmt::Formatter;
+use embassy_time::Duration;
 use fixed::ParseFixedError;
 use fixed::types::{I1F15, U3F29, U16F16, U16F48};
 
@@ -23,9 +26,16 @@ pub struct Angle<T: AngleType> {
 }
 
 #[cfg(feature = "defmt")]
-impl<T: AngleType> defmt::Format for Angle<T> {
-    fn format(&self, fmt: Formatter) {
-        defmt::write!(fmt, "Angle ({} °)", self.as_degrees().to_num::<f32>());
+impl defmt::Format for Angle<Electrical> {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(fmt, "Electrical ({}°)", self.as_degrees().to_num::<f32>());
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for Angle<Mechanical> {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(fmt, "Mechanical ({}°)", self.as_degrees().to_num::<f32>());
     }
 }
 
@@ -36,7 +46,7 @@ pub enum AngleAny {
 }
 #[cfg(feature = "defmt")]
 impl defmt::Format for AngleAny {
-    fn format(&self, fmt: Formatter) {
+    fn format(&self, fmt: defmt::Formatter) {
         match self {
             AngleAny::Electrical(value) => {
                 defmt::write!(fmt, "Electrical ({}°)", value.as_degrees().to_num::<f32>(),)
@@ -163,28 +173,26 @@ impl<T: AngleType> Angle<T> {
     pub fn raw(&self) -> u16 {
         self.raw_angle
     }
+
+    pub fn is_reflex_angle(&self) -> bool {
+        self.raw_angle > u16::MAX / 2
+    }
 }
 
-impl Angle<Electrical> {
+impl Angle<Mechanical> {
     // TODO write this without if
-    pub fn from_mechanical(
-        angle: &Angle<Mechanical>,
-        offset: &Angle<Electrical>,
-        pole_pairs: i16,
-    ) -> Self {
+    pub fn to_electrical(&self, offset: &Angle<Electrical>, pole_pairs: i16) -> Angle<Electrical> {
         if pole_pairs > 0 {
             let pole_pairs = pole_pairs as u16;
-            Self::from_raw(
-                angle
-                    .raw_angle
+            Angle::<Electrical>::from_raw(
+                self.raw_angle
                     .wrapping_sub(offset.raw_angle)
                     .wrapping_mul(pole_pairs),
             )
         } else {
             let pole_pairs = (-pole_pairs) as u16;
-            Self::from_raw(
-                angle
-                    .raw_angle
+            Angle::<Electrical>::from_raw(
+                self.raw_angle
                     .wrapping_sub(offset.raw_angle)
                     .wrapping_mul(pole_pairs),
             )
@@ -213,6 +221,30 @@ pub enum ParseAngleError {
 impl From<ParseFixedError> for ParseAngleError {
     fn from(value: ParseFixedError) -> Self {
         ParseAngleError::ParseFixedError(value)
+    }
+}
+
+impl<T> Div<Duration> for Angle<T>
+where
+    T: VelocityType,
+    T: AngleType,
+{
+    type Output = Velocity<T>;
+
+    fn div(self, rhs: Duration) -> Self::Output {
+        let (angle_delta, is_clockwise) = if self.is_reflex_angle() {
+            (self.inverted(), false)
+        } else {
+            (self, true)
+        };
+        // raws per millisecond
+        let speed = angle_delta.raw() as u64 * 1000 / rhs.as_micros();
+        let speed = if is_clockwise {
+            speed as i32
+        } else {
+            -(speed as i32)
+        };
+        Velocity::from_fraction_per_millisecond(speed)
     }
 }
 
@@ -296,13 +328,29 @@ mod test {
         for (raw_mech, offset, pole_pairs, expected) in cases {
             let offset = Angle::<Electrical>::from_raw(offset);
             let mechanical = Angle::<Mechanical>::from_raw(raw_mech);
-            let electrical = Angle::<Electrical>::from_mechanical(&mechanical, &offset, pole_pairs);
+            let electrical = &mechanical.to_electrical(&offset, pole_pairs);
             assert_eq!(
                 electrical.raw_angle, expected,
                 "Failed for mech={}, offset={}, pole_pairs={}",
                 raw_mech, offset.raw_angle, pole_pairs
             );
         }
+    }
+
+    #[test]
+    fn test_velocity_conversion() {
+        assert_eq!(
+            Angle::<Electrical>::from_degrees(U16F16::from_num(90)) / Duration::from_millis(1000),
+            Velocity::from_rpm(15),
+        );
+        assert_eq!(
+            Angle::<Electrical>::from_degrees(U16F16::from_num(180)) / Duration::from_millis(1000),
+            Velocity::from_rpm(30),
+        );
+        assert_eq!(
+            Angle::<Electrical>::from_degrees(U16F16::from_num(270)) / Duration::from_millis(1000),
+            Velocity::from_rpm(-15),
+        );
     }
 
     fn approx_eq(a: I1F15, b: I1F15) -> bool {
