@@ -2,8 +2,10 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant};
+use fixed::types::I32F32;
 use shared::units::angle::{AngleAny, Electrical, Mechanical};
 use shared::units::{Angle, Current, Velocity, Voltage};
+use shared::utils::pid;
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
@@ -21,6 +23,15 @@ pub struct ShaftData {
     pub measure_time: Instant,
     pub shaft_calibration: ShaftCalibrationConstants,
     pub filtered_velocity: Velocity<Electrical>,
+}
+
+impl ShaftData {
+    pub fn estimate_electrical_angle_now(&self) -> Angle<Electrical> {
+        let now = Instant::now();
+        let elapsed = now - self.measure_time;
+        self.electrical_angle
+            .overflowing_add(&(self.filtered_velocity * elapsed))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -123,6 +134,8 @@ pub struct Motor {
     pub shaft: Mutex<CriticalSectionRawMutex, Option<ShaftData>>,
     pub state: Mutex<CriticalSectionRawMutex, MotorStateSnapshot>,
     pub command: Signal<CriticalSectionRawMutex, ControlCommand>,
+    pub position_pid: Mutex<CriticalSectionRawMutex, pid::Controller<I32F32>>,
+    pub velocity_pid: Mutex<CriticalSectionRawMutex, pid::Controller<I32F32>>,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -141,6 +154,8 @@ impl Motor {
             shaft: Mutex::new(None),
             state: Mutex::new(MotorStateSnapshot::new(MotorState::Uninitialized)),
             command: Signal::new(),
+            position_pid: Mutex::new(pid::Controller::default()),
+            velocity_pid: Mutex::new(pid::Controller::default()),
         }
     }
 

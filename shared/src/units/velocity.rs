@@ -1,9 +1,13 @@
+use crate::units::Angle;
+use crate::units::angle::AngleType;
 pub use crate::units::angle::Electrical;
 pub use crate::units::angle::Mechanical;
 use crate::units::low_pass_filter::LowPassFilter;
 use core::marker::PhantomData;
 use core::num::ParseIntError;
+use core::ops::Mul;
 use core::str::FromStr;
+use embassy_time::Duration;
 use fixed::types::{I32F32, U1F15};
 
 pub trait VelocityType {}
@@ -90,6 +94,19 @@ impl<T: VelocityType> LowPassFilter<Velocity<T>> for Velocity<T> {
             raw_velocity: (self_velocity - change).to_num::<i32>(),
             _kind: PhantomData,
         }
+    }
+}
+
+impl<T> Mul<Duration> for Velocity<T>
+where
+    T: VelocityType,
+    T: AngleType,
+{
+    type Output = Angle<T>;
+
+    fn mul(self, rhs: Duration) -> Self::Output {
+        let distance = self.raw_velocity.abs() as u64 * rhs.as_micros() / 1000;
+        Angle::<T>::from_raw(distance as u16)
     }
 }
 

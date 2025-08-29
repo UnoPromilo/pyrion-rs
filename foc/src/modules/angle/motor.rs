@@ -1,17 +1,17 @@
 use crate::Motor;
 use crate::angle::calibration_accumulator::CalibrationAccumulator;
-use crate::state::ShaftCalibrationState::{MeasuringFast, MeasuringSlow};
 use crate::state::MotorState::Powered;
 use crate::state::Powered::ShaftCalibration;
+use crate::state::ShaftCalibrationState::{MeasuringFast, MeasuringSlow};
 use crate::state::{MotorState, ShaftCalibrationConstants, ShaftData};
 use embassy_time::Duration;
 use embassy_time::Instant;
 use fixed::types::U1F15;
 use hardware_abstraction::angle_sensor::AngleReader;
 use shared::units::angle::{AngleAny, Electrical};
+use shared::units::low_pass_filter::LowPassFilter;
 use shared::units::{Angle, Velocity};
 use shared::{error, info};
-use shared::units::low_pass_filter::LowPassFilter;
 
 impl Motor {
     pub async fn update_angle_task<R: AngleReader>(
@@ -23,8 +23,9 @@ impl Motor {
                 self.calibrate_shaft(angle_reader).await?;
             }
 
+            let measure_time = Instant::now();
             let angle = angle_reader.read_angle().await?;
-            self.store_shaft_data(angle).await;
+            self.store_shaft_data(angle, measure_time).await;
         }
     }
 
@@ -35,8 +36,10 @@ impl Motor {
         let mut accumulator_fast = CalibrationAccumulator::<16>::new();
 
         loop {
+            let measure_time = Instant::now();
             let current_angle = angle_reader.read_angle().await?;
-            self.store_shaft_data(current_angle.clone()).await;
+            self.store_shaft_data(current_angle.clone(), measure_time)
+                .await;
 
             let current_mech = match current_angle {
                 AngleAny::Mechanical(value) => value,
@@ -134,15 +137,13 @@ impl Motor {
         }
     }
 
-    async fn store_shaft_data(&self, angle: AngleAny) {
+    async fn store_shaft_data(&self, angle: AngleAny, measure_time: Instant) {
         let mut shaft_data_guard = self.shaft.lock().await;
 
         let calibration = shaft_data_guard
             .map(|shaft| shaft.shaft_calibration)
             .unwrap_or_default();
 
-        // TODO now before or after reading?
-        let measure_time = Instant::now();
         let electrical_angle = match angle {
             AngleAny::Electrical(value) => value,
             AngleAny::Mechanical(value) => {

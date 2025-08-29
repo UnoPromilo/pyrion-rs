@@ -1,37 +1,85 @@
 use crate::Motor;
 use crate::internal_functions::{clarke_transformation, park_transformation};
 use crate::state::{
-    CalibratingCurrentSensorState::*, ControlCommand, ShaftCalibrationState::*,
-    InitializationState::*, MotorState, MotorState::*, MotorStateSnapshot, Powered::*,
+    CalibratingCurrentSensorState::*, ControlCommand, InitializationState::*, MotorState,
+    MotorState::*, MotorStateSnapshot, Powered::*, ShaftCalibrationState::*, ShaftData,
 };
 use embassy_time::{Duration, Ticker};
 use hardware_abstraction::motor_driver::MotorDriver;
 use shared::info;
-use shared::units::Angle;
 use shared::units::angle::Electrical;
+use shared::units::{Angle, Voltage};
 
-const STATE_LOOP_FREQUENCY: Duration = Duration::from_hz(2000);
+const STATE_LOOP_FREQUENCY: Duration = Duration::from_hz(20000);
+const SLOW_LOOP_DIVIDER: u32 = 50;
 
 pub async fn state_machine_task(motor: &Motor, driver: &mut impl MotorDriver) {
     let mut ticker = Ticker::every(STATE_LOOP_FREQUENCY);
+    let mut counter = 0;
     loop {
         ticker.next().await;
-        let mut state_snapshot = motor.state.lock().await;
-        let duration = state_snapshot.state_set_at.elapsed();
-
-        let next_motor_state = if does_state_allow_command_handling(state_snapshot.state)
-            && let Some(command) = motor.command.try_take()
-            && let Some(new_state) = handle_command(command)
-        {
-            Some(new_state)
-        } else {
-            next_motor_state(state_snapshot.state, duration)
-        };
-
-        if let Some(next_state) = next_motor_state {
-            apply_state_transition(next_state, state_snapshot.state, driver);
-            *state_snapshot = MotorStateSnapshot::new(next_state);
+        counter += 1;
+        fast_loop(motor, driver).await;
+        if counter == SLOW_LOOP_DIVIDER {
+            slow_loop(motor, driver).await;
+            counter = 0;
         }
+    }
+}
+
+async fn fast_loop(motor: &Motor, driver: &mut impl MotorDriver) {
+    let state = {
+        let state_snapshot = motor.state.lock().await;
+        state_snapshot.state.clone()
+    };
+
+    match state {
+        Uninitialized => {}
+        Initializing(_) => {}
+        Idle => {}
+        Powered(powered) => match powered {
+            ShaftCalibration(measurement) => match measurement {
+                WarmUp(_) => {}
+                MeasuringSlow(_, _) => {}
+                MeasuringFast(_, _) => {}
+                Return(_, _) => {}
+            },
+        },
+    }
+}
+
+async fn update_velocity(motor: &Motor) {
+    let shaft = {
+        let state_snapshot = motor.shaft.lock().await;
+        state_snapshot.clone()
+    };
+
+    // Can't do anything if we don't have a shaft
+    let shaft = match shaft {
+        None => return,
+        Some(shaft) => shaft,
+    };
+    
+    let estimated_position_now = shaft.estimate_electrical_angle_now();
+    //drive_motor()
+}
+
+async fn slow_loop(motor: &Motor, driver: &mut impl MotorDriver) {
+    let mut state_snapshot = motor.state.lock().await;
+    let duration = state_snapshot.state_set_at.elapsed();
+
+    let next_motor_state = if does_state_allow_command_handling(state_snapshot.state)
+        && let Some(command) = motor.command.try_take()
+        && let Some(new_state) = handle_command(command)
+    {
+        Some(new_state)
+    } else {
+        next_motor_state(state_snapshot.state, duration)
+    };
+
+    if let Some(next_state) = next_motor_state {
+        apply_state_transition(next_state, state_snapshot.state, driver);
+        *state_snapshot = MotorStateSnapshot::new(next_state);
     }
 }
 
@@ -40,8 +88,8 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
     const CURRENT_SENSOR_PHASE_CALIBRATION_TIME: Duration = Duration::from_millis(100);
 
     // TODO have single constant for state machine and motor
-    const ENCODER_CALIBRATION_STEP_SLOW: Angle<Electrical> = Angle::<Electrical>::from_raw(128); // Around 2 degrees
-    const ENCODER_CALIBRATION_STEPS_FAST: Angle<Electrical> = Angle::<Electrical>::from_raw(512);
+    const ENCODER_CALIBRATION_STEP_SLOW: Angle<Electrical> = Angle::<Electrical>::from_raw(256); // Around 2 degrees
+    const ENCODER_CALIBRATION_STEPS_FAST: Angle<Electrical> = Angle::<Electrical>::from_raw(1024);
     const ENCODER_POLES_MEASURING_ROTATIONS: u8 = 14;
 
     match current {
@@ -172,7 +220,8 @@ fn apply_state_transition(
                     | MeasuringSlow(angle, _)
                     | MeasuringFast(angle, _)
                     | Return(angle, _) => {
-                        drive_motor(&angle, driver);
+                        // TODO remove
+                        //drive_motor(&angle, driver);
                     }
                 },
             }
@@ -206,8 +255,8 @@ fn handle_command(control_command: ControlCommand) -> Option<MotorState> {
     }
 }
 
-fn drive_motor(angle: &Angle<Electrical>, motor: &mut impl MotorDriver) {
-    let (alpha, beta) = park_transformation::inverse(0, i16::MAX / 3, angle);
+fn drive_motor(angle: &Angle<Electrical>, i_q: i16, motor: &mut impl MotorDriver) {
+    let (alpha, beta) = park_transformation::inverse(0, i_q, angle);
     let (voltage_a, voltage_b, voltage_c) = clarke_transformation::inverse(alpha, beta);
     motor.set_voltages(voltage_a, voltage_b, voltage_c);
 }

@@ -237,7 +237,7 @@ where
         } else {
             (self, true)
         };
-        // raws per millisecond
+        // 1/65535 of revolution per millisecond
         let speed = angle_delta.raw() as u64 * 1000 / rhs.as_micros();
         let speed = if is_clockwise {
             speed as i32
