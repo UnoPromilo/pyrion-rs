@@ -32,7 +32,7 @@ pub fn from_adc_to_current(raw: u16, constants: &ConversionConstants) -> Current
     let v_mv_fp = (raw as u64 * constants.adc_to_mv_scale) >> SHIFT;
     let v_diff_mv = v_mv_fp as i64 - constants.v_ref_mid_mv;
     let current_ma = (v_diff_mv * constants.gain_scale as i64) >> SHIFT;
-    Current::from_milliamps(current_ma.clamp(i16::MIN as i64, i16::MAX as i64) as i16)
+    Current::from_milliamps(current_ma.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
 }
 
 impl ConversionConstants {

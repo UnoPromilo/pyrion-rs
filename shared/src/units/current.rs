@@ -5,16 +5,16 @@ use core::str::FromStr;
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Current(i16);
+pub struct Current(i32);
 
 impl Current {
     #[inline(always)]
-    pub fn from_milliamps(val: i16) -> Self {
+    pub fn from_milliamps(val: i32) -> Self {
         Self(val)
     }
 
     #[inline(always)]
-    pub fn as_milliamps(&self) -> i16 {
+    pub fn as_milliamps(&self) -> i32 {
         self.0
     }
 }
@@ -41,7 +41,7 @@ impl FromStr for Current {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::from_milliamps(s.parse::<i16>()?))
+        Ok(Self::from_milliamps(s.parse::<i32>()?))
     }
 }
 

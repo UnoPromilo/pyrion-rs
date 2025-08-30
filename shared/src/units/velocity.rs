@@ -71,6 +71,10 @@ impl<T: VelocityType> Velocity<T> {
     pub fn as_rpm(&self) -> i16 {
         ((self.raw_velocity as i128) * Self::MULTIPLIER / Self::SCALE) as i16
     }
+
+    pub fn raw(&self) -> i32 {
+        self.raw_velocity
+    }
 }
 
 impl<T: VelocityType> FromStr for Velocity<T> {

@@ -134,8 +134,13 @@ pub struct Motor {
     pub shaft: Mutex<CriticalSectionRawMutex, Option<ShaftData>>,
     pub state: Mutex<CriticalSectionRawMutex, MotorStateSnapshot>,
     pub command: Signal<CriticalSectionRawMutex, ControlCommand>,
+
+    // TODO pid values should be configurable and stored in flash, the same as the shaft calibration constants
+    // PID controllers should not be used outside the motor state machine
     pub position_pid: Mutex<CriticalSectionRawMutex, pid::Controller<I32F32>>,
     pub velocity_pid: Mutex<CriticalSectionRawMutex, pid::Controller<I32F32>>,
+    pub i_d_pid: Mutex<CriticalSectionRawMutex, pid::Controller<I32F32>>,
+    pub i_q_pid: Mutex<CriticalSectionRawMutex, pid::Controller<I32F32>>,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -156,6 +161,8 @@ impl Motor {
             command: Signal::new(),
             position_pid: Mutex::new(pid::Controller::default()),
             velocity_pid: Mutex::new(pid::Controller::default()),
+            i_d_pid: Mutex::new(pid::Controller::default()),
+            i_q_pid: Mutex::new(pid::Controller::default()),
         }
     }
 

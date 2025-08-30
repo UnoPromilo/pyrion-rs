@@ -5,29 +5,37 @@ use crate::state::{
     MotorState::*, MotorStateSnapshot, Powered::*, ShaftCalibrationState::*, ShaftData,
 };
 use embassy_time::{Duration, Ticker};
+use fixed::types::I32F32;
 use hardware_abstraction::motor_driver::MotorDriver;
 use shared::info;
 use shared::units::angle::Electrical;
-use shared::units::{Angle, Voltage};
+use shared::units::{Angle, Current, Velocity};
 
-const STATE_LOOP_FREQUENCY: Duration = Duration::from_hz(20000);
-const SLOW_LOOP_DIVIDER: u32 = 50;
+const LOOP_FREQUENCY: Duration = Duration::from_hz(20_000);
+const STATE_LOOP_DIVIDER: u32 = 40; // 500Hz
+const PID_LOOP_DIVIDER: u32 = 10; // 2000Hz
 
 pub async fn state_machine_task(motor: &Motor, driver: &mut impl MotorDriver) {
-    let mut ticker = Ticker::every(STATE_LOOP_FREQUENCY);
-    let mut counter = 0;
+    let mut ticker = Ticker::every(LOOP_FREQUENCY);
+    let mut state_counter = 0;
+    let mut pid_counter = 0;
     loop {
         ticker.next().await;
-        counter += 1;
-        fast_loop(motor, driver).await;
-        if counter == SLOW_LOOP_DIVIDER {
-            slow_loop(motor, driver).await;
-            counter = 0;
+        state_counter += 1;
+        pid_counter += 1;
+        if state_counter == STATE_LOOP_DIVIDER {
+            state_loop(motor, driver).await;
+            state_counter = 0;
         }
+        if pid_counter == PID_LOOP_DIVIDER {
+            pid_counter = 0;
+            pid_loop(motor).await;
+        }
+        drive_motor(motor, driver).await;
     }
 }
 
-async fn fast_loop(motor: &Motor, driver: &mut impl MotorDriver) {
+async fn pid_loop(motor: &Motor) {
     let state = {
         let state_snapshot = motor.state.lock().await;
         state_snapshot.state.clone()
@@ -40,8 +48,12 @@ async fn fast_loop(motor: &Motor, driver: &mut impl MotorDriver) {
         Powered(powered) => match powered {
             ShaftCalibration(measurement) => match measurement {
                 WarmUp(_) => {}
-                MeasuringSlow(_, _) => {}
-                MeasuringFast(_, _) => {}
+                MeasuringSlow(_, _) => {
+                    update_velocity(motor).await;
+                }
+                MeasuringFast(_, _) => {
+                    update_velocity(motor).await;
+                }
                 Return(_, _) => {}
             },
         },
@@ -49,22 +61,99 @@ async fn fast_loop(motor: &Motor, driver: &mut impl MotorDriver) {
 }
 
 async fn update_velocity(motor: &Motor) {
-    let shaft = {
-        let state_snapshot = motor.shaft.lock().await;
-        state_snapshot.clone()
-    };
+    let shaft = { motor.shaft.lock().await.clone() };
 
     // Can't do anything if we don't have a shaft
     let shaft = match shaft {
         None => return,
         Some(shaft) => shaft,
     };
-    
-    let estimated_position_now = shaft.estimate_electrical_angle_now();
-    //drive_motor()
+
+    // TODO rename all elec. angle to theta?
+    let ref_i_q = {
+        let raw_velocity = I32F32::from_num(shaft.filtered_velocity.raw());
+        // TODO add option to select if it should be raw velocity, filtered velocity or estimated velocity
+        let output = motor
+            .velocity_pid
+            .try_lock()
+            .expect("Could not lock velocity PID, is it already running?")
+            .update(raw_velocity)
+            .to_num::<i32>();
+
+        Current::from_milliamps(output)
+    };
+    let ref_i_d = Current::from_milliamps(0);
+    {
+        // TODO PID should accept current and velocity as inputs
+        motor
+            .i_d_pid
+            .try_lock()
+            .expect("Could not lock i_d PID, is it already running?")
+            .set_target(I32F32::from_num(ref_i_d.as_milliamps()));
+        motor
+            .i_q_pid
+            .try_lock()
+            .expect("Could not lock i_q PID, is it already running?")
+            .set_target(I32F32::from_num(ref_i_q.as_milliamps()));
+    }
 }
 
-async fn slow_loop(motor: &Motor, driver: &mut impl MotorDriver) {
+async fn drive_motor(motor: &Motor, driver: &mut impl MotorDriver) {
+    let currents = { motor.current.lock().await.clone() };
+    let shaft = { motor.shaft.lock().await.clone() };
+    // Can't do anything if we don't have a shaft
+    let theta = match shaft {
+        None => return,
+        Some(shaft) => shaft.estimate_electrical_angle_now(),
+    };
+
+    // TODO if current are none, convert current to voltage using the constant scalling factor
+    let currents = match currents {
+        None => todo!("Drive motor with voltage"),
+        Some(currents) => currents,
+    };
+
+    // TODO run assume_balanced when only two currents are given
+    let (i_alpha, i_beta) = clarke_transformation::full(
+        currents.a.as_milliamps(),
+        currents.b.as_milliamps(),
+        currents.c.as_milliamps(),
+    );
+
+    let (i_d, i_q) = park_transformation::forward(i_alpha, i_beta, &theta);
+    let (v_d, v_q): (i32, i32) = {
+        (
+            motor
+                .i_d_pid
+                .try_lock()
+                .expect("Could not lock i_d PID, is it already running?")
+                .update(I32F32::from_num(i_d))
+                .to_num(),
+            motor
+                .i_q_pid
+                .try_lock()
+                .expect("Could not lock i_q PID, is it already running?")
+                .update(I32F32::from_num(i_q))
+                .to_num(),
+        )
+    };
+    // TODO Cross-coupling & feedforward (when inductance is known)
+
+    // TODO limit voltage to max voltage (find what it is)
+    let (v_alpha, v_beta) = park_transformation::inverse(v_d, v_q, &theta);
+
+    // TODO space vector modulation
+    let (v_a, v_b, v_c) = clarke_transformation::inverse(v_alpha, v_beta);
+
+    // TODO do better clamping/conversion logic
+    let v_a = v_a.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+    let v_b = v_b.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+    let v_c = v_c.clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+
+    driver.set_voltages(v_a, v_b, v_c);
+}
+
+async fn state_loop(motor: &Motor, driver: &mut impl MotorDriver) {
     let mut state_snapshot = motor.state.lock().await;
     let duration = state_snapshot.state_set_at.elapsed();
 
@@ -78,7 +167,7 @@ async fn slow_loop(motor: &Motor, driver: &mut impl MotorDriver) {
     };
 
     if let Some(next_state) = next_motor_state {
-        apply_state_transition(next_state, state_snapshot.state, driver);
+        apply_state_transition(next_state, state_snapshot.state, motor, driver);
         *state_snapshot = MotorStateSnapshot::new(next_state);
     }
 }
@@ -182,6 +271,7 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
 fn apply_state_transition(
     new_state: MotorState,
     current_state: MotorState,
+    motor: &Motor,
     driver: &mut impl MotorDriver,
 ) {
     match new_state {
@@ -216,12 +306,41 @@ fn apply_state_transition(
             }
             match powered {
                 ShaftCalibration(measurement) => match measurement {
-                    WarmUp(angle)
-                    | MeasuringSlow(angle, _)
-                    | MeasuringFast(angle, _)
-                    | Return(angle, _) => {
-                        // TODO remove
-                        //drive_motor(&angle, driver);
+                    WarmUp(_) => {
+                        let mut pid = motor
+                            .velocity_pid
+                            .try_lock()
+                            .expect("Could not lock velocity PID, is it already running?");
+
+                        pid.reset();
+                        pid.set_target(I32F32::from_num(
+                            Velocity::<Electrical>::from_rpm(60).raw(),
+                        ));
+                    }
+                    MeasuringSlow(_, _) => {
+                        let mut pid = motor
+                            .velocity_pid
+                            .try_lock()
+                            .expect("Could not lock velocity PID, is it already running?");
+
+                        pid.reset();
+                        pid.set_target(I32F32::from_num(
+                            Velocity::<Electrical>::from_rpm(60).raw(),
+                        ));
+                    }
+                    MeasuringFast(_, _) => {
+                        let mut pid = motor
+                            .velocity_pid
+                            .try_lock()
+                            .expect("Could not lock velocity PID, is it already running?");
+
+                        pid.reset();
+                        pid.set_target(I32F32::from_num(
+                            Velocity::<Electrical>::from_rpm(300).raw(),
+                        ));
+                    }
+                    Return(_, _) => {
+                        driver.disable();
                     }
                 },
             }
@@ -255,8 +374,9 @@ fn handle_command(control_command: ControlCommand) -> Option<MotorState> {
     }
 }
 
+/*
 fn drive_motor(angle: &Angle<Electrical>, i_q: i16, motor: &mut impl MotorDriver) {
     let (alpha, beta) = park_transformation::inverse(0, i_q, angle);
     let (voltage_a, voltage_b, voltage_c) = clarke_transformation::inverse(alpha, beta);
     motor.set_voltages(voltage_a, voltage_b, voltage_c);
-}
+}*/
