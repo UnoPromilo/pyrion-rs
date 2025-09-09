@@ -112,10 +112,10 @@ pub enum Powered {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy)]
 pub enum ShaftCalibrationState {
-    WarmUp(Angle<Electrical>),
-    MeasuringSlow(Angle<Electrical>, u8),
-    MeasuringFast(Angle<Electrical>, u8),
-    Return(Angle<Electrical>, u8),
+    WarmUp(),
+    MeasuringSlow(),
+    ChangeSpeed(),
+    MeasuringFast(),
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

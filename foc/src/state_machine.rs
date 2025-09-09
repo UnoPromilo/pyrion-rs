@@ -2,7 +2,7 @@ use crate::Motor;
 use crate::internal_functions::{clarke_transformation, park_transformation};
 use crate::state::{
     CalibratingCurrentSensorState::*, ControlCommand, InitializationState::*, MotorState,
-    MotorState::*, MotorStateSnapshot, Powered::*, ShaftCalibrationState::*, ShaftData,
+    MotorState::*, MotorStateSnapshot, Powered::*, ShaftCalibrationState::*,
 };
 use embassy_time::{Duration, Ticker};
 use fixed::types::I32F32;
@@ -14,6 +14,10 @@ use shared::units::{Angle, Current, Velocity};
 const LOOP_FREQUENCY: Duration = Duration::from_hz(20_000);
 const STATE_LOOP_DIVIDER: u32 = 40; // 500Hz
 const PID_LOOP_DIVIDER: u32 = 10; // 2000Hz
+
+// TODO have single constant for state machine and motor
+const ENCODER_CALIBRATION_SPEED_SLOW_RPM: i16 = 100;
+const ENCODER_CALIBRATION_SPEED_FAST_RPM: i16 = 300;
 
 pub async fn state_machine_task(motor: &Motor, driver: &mut impl MotorDriver) {
     let mut ticker = Ticker::every(LOOP_FREQUENCY);
@@ -46,16 +50,7 @@ async fn pid_loop(motor: &Motor) {
         Initializing(_) => {}
         Idle => {}
         Powered(powered) => match powered {
-            ShaftCalibration(measurement) => match measurement {
-                WarmUp(_) => {}
-                MeasuringSlow(_, _) => {
-                    update_velocity(motor).await;
-                }
-                MeasuringFast(_, _) => {
-                    update_velocity(motor).await;
-                }
-                Return(_, _) => {}
-            },
+            ShaftCalibration(_) => update_velocity(motor).await,
         },
     }
 }
@@ -72,11 +67,11 @@ async fn update_velocity(motor: &Motor) {
     // TODO rename all elec. angle to theta?
     let ref_i_q = {
         let raw_velocity = I32F32::from_num(shaft.filtered_velocity.raw());
-        // TODO add option to select if it should be raw velocity, filtered velocity or estimated velocity
+        // TODO add option to select if it should be raw Velocity, filtered Velocity or estimated Velocity
         let output = motor
             .velocity_pid
             .try_lock()
-            .expect("Could not lock velocity PID, is it already running?")
+            .expect("Could not lock Velocity PID, is it already running?")
             .update(raw_velocity)
             .to_num::<i32>();
 
@@ -84,7 +79,7 @@ async fn update_velocity(motor: &Motor) {
     };
     let ref_i_d = Current::from_milliamps(0);
     {
-        // TODO PID should accept current and velocity as inputs
+        // TODO PID should accept Current and Velocity as inputs
         motor
             .i_d_pid
             .try_lock()
@@ -107,9 +102,10 @@ async fn drive_motor(motor: &Motor, driver: &mut impl MotorDriver) {
         Some(shaft) => shaft.estimate_electrical_angle_now(),
     };
 
-    // TODO if current are none, convert current to voltage using the constant scalling factor
+    // TODO if Current are none, convert Current to voltage using the constant scaling factor
     let currents = match currents {
-        None => todo!("Drive motor with voltage"),
+        None => return, // todo Drive motor with voltage
+
         Some(currents) => currents,
     };
 
@@ -175,11 +171,7 @@ async fn state_loop(motor: &Motor, driver: &mut impl MotorDriver) {
 fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState> {
     const INITIAL_DEAD_TIME: Duration = Duration::from_millis(500);
     const CURRENT_SENSOR_PHASE_CALIBRATION_TIME: Duration = Duration::from_millis(100);
-
-    // TODO have single constant for state machine and motor
-    const ENCODER_CALIBRATION_STEP_SLOW: Angle<Electrical> = Angle::<Electrical>::from_raw(256); // Around 2 degrees
-    const ENCODER_CALIBRATION_STEPS_FAST: Angle<Electrical> = Angle::<Electrical>::from_raw(1024);
-    const ENCODER_POLES_MEASURING_ROTATIONS: u8 = 14;
+    const ENCODER_CALIBRATION_STEP_TIME: Duration = Duration::from_millis(1000);
 
     match current {
         Uninitialized if elapsed > INITIAL_DEAD_TIME => {
@@ -197,74 +189,23 @@ fn next_motor_state(current: MotorState, elapsed: Duration) -> Option<MotorState
         }
         Initializing(CalibratingCurrentSensor(_)) => None,
         Idle => None,
-        Powered(ShaftCalibration(measurement)) => match measurement {
-            WarmUp(current_angle) => {
-                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP_SLOW) {
-                    Some(Powered(ShaftCalibration(WarmUp(new_angle))))
-                } else {
-                    info!("Measuring...");
-                    Some(Powered(ShaftCalibration(MeasuringSlow(
-                        Angle::<Electrical>::zero(),
-                        0,
-                    ))))
-                }
-            }
-            MeasuringSlow(current_angle, rotation_count) => {
-                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEP_SLOW) {
-                    Some(Powered(ShaftCalibration(MeasuringSlow(
-                        new_angle,
-                        rotation_count,
-                    ))))
-                } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
-                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEP_SLOW);
-                    Some(Powered(ShaftCalibration(MeasuringSlow(
-                        new_angle,
-                        rotation_count + 1,
-                    ))))
-                } else {
-                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEPS_FAST);
+        Powered(ShaftCalibration(measurement)) if elapsed > ENCODER_CALIBRATION_STEP_TIME => {
+            match measurement {
+                WarmUp() => Some(Powered(ShaftCalibration(MeasuringSlow()))),
+                MeasuringSlow() => {
                     info!("Slow measurement is done!");
                     info!("Now a little faster");
-                    Some(Powered(ShaftCalibration(MeasuringFast(new_angle, 0))))
+                    Some(Powered(ShaftCalibration(ChangeSpeed())))
                 }
-            }
-            MeasuringFast(current_angle, rotation_count) => {
-                if let Some(new_angle) = current_angle.checked_add(&ENCODER_CALIBRATION_STEPS_FAST)
-                {
-                    Some(Powered(ShaftCalibration(MeasuringFast(
-                        new_angle,
-                        rotation_count,
-                    ))))
-                } else if rotation_count < ENCODER_POLES_MEASURING_ROTATIONS {
-                    let new_angle = current_angle.overflowing_add(&ENCODER_CALIBRATION_STEPS_FAST);
-                    Some(Powered(ShaftCalibration(MeasuringFast(
-                        new_angle,
-                        rotation_count + 1,
-                    ))))
-                } else {
+                ChangeSpeed() => Some(Powered(ShaftCalibration(MeasuringFast()))),
+                MeasuringFast() => {
                     info!("Measuring done!");
                     info!("Spinning back to the original position");
-                    Some(Powered(ShaftCalibration(Return(
-                        Angle::<Electrical>::max(),
-                        ENCODER_POLES_MEASURING_ROTATIONS * 2 + 1,
-                    ))))
-                }
-            }
-            Return(current_angle, rotation_count) => {
-                if let Some(new_angle) = current_angle.checked_sub(&ENCODER_CALIBRATION_STEPS_FAST)
-                {
-                    Some(Powered(ShaftCalibration(Return(new_angle, rotation_count))))
-                } else if rotation_count > 0 {
-                    let new_angle = current_angle.overflowing_sub(&ENCODER_CALIBRATION_STEPS_FAST);
-                    Some(Powered(ShaftCalibration(Return(
-                        new_angle,
-                        rotation_count - 1,
-                    ))))
-                } else {
                     Some(Idle)
                 }
             }
-        },
+        }
+        Powered(ShaftCalibration(_)) => None,
     }
 }
 
@@ -278,19 +219,19 @@ fn apply_state_transition(
         Uninitialized => {}
         Initializing(CalibratingCurrentSensor(phase)) => match phase {
             PhaseAPowered => {
-                info!("Calibrating current sensor, phase A powered");
+                info!("Calibrating Current sensor, phase A powered");
                 driver.disable();
                 driver.enable_phase_a();
                 driver.set_voltage_a(0);
             }
             PhaseBPowered => {
-                info!("Calibrating current sensor, phase B powered");
+                info!("Calibrating Current sensor, phase B powered");
                 driver.disable();
                 driver.enable_phase_b();
                 driver.set_voltage_b(0);
             }
             PhaseCPowered => {
-                info!("Calibrating current sensor, phase C powered");
+                info!("Calibrating Current sensor, phase C powered");
                 driver.disable();
                 driver.enable_phase_c();
                 driver.set_voltage_c(0);
@@ -306,41 +247,35 @@ fn apply_state_transition(
             }
             match powered {
                 ShaftCalibration(measurement) => match measurement {
-                    WarmUp(_) => {
+                    WarmUp() => {
                         let mut pid = motor
                             .velocity_pid
                             .try_lock()
-                            .expect("Could not lock velocity PID, is it already running?");
+                            .expect("Could not lock Velocity PID, is it already running?");
 
                         pid.reset();
                         pid.set_target(I32F32::from_num(
-                            Velocity::<Electrical>::from_rpm(60).raw(),
+                            Velocity::<Electrical>::from_rpm(ENCODER_CALIBRATION_SPEED_SLOW_RPM)
+                                .raw(),
                         ));
                     }
-                    MeasuringSlow(_, _) => {
+                    MeasuringSlow() => {
+                        info!("Measuring slow...");
+                    }
+                    ChangeSpeed() => {
                         let mut pid = motor
                             .velocity_pid
                             .try_lock()
-                            .expect("Could not lock velocity PID, is it already running?");
+                            .expect("Could not lock Velocity PID, is it already running?");
 
                         pid.reset();
                         pid.set_target(I32F32::from_num(
-                            Velocity::<Electrical>::from_rpm(60).raw(),
+                            Velocity::<Electrical>::from_rpm(ENCODER_CALIBRATION_SPEED_FAST_RPM)
+                                .raw(),
                         ));
                     }
-                    MeasuringFast(_, _) => {
-                        let mut pid = motor
-                            .velocity_pid
-                            .try_lock()
-                            .expect("Could not lock velocity PID, is it already running?");
-
-                        pid.reset();
-                        pid.set_target(I32F32::from_num(
-                            Velocity::<Electrical>::from_rpm(300).raw(),
-                        ));
-                    }
-                    Return(_, _) => {
-                        driver.disable();
+                    MeasuringFast() => {
+                        info!("Measuring fast...");
                     }
                 },
             }
@@ -362,9 +297,7 @@ fn handle_command(control_command: ControlCommand) -> Option<MotorState> {
         ControlCommand::CalibrateShaft => {
             info!("Calibrating shaft");
             info!("Warming up motor");
-            Some(Powered(ShaftCalibration(WarmUp(
-                Angle::<Electrical>::zero(),
-            ))))
+            Some(Powered(ShaftCalibration(WarmUp())))
         }
         ControlCommand::SetTargetZero => todo!(),
         ControlCommand::SetTargetVoltage(_) => todo!(),
@@ -373,10 +306,3 @@ fn handle_command(control_command: ControlCommand) -> Option<MotorState> {
         ControlCommand::SetTargetPosition(_) => todo!(),
     }
 }
-
-/*
-fn drive_motor(angle: &Angle<Electrical>, i_q: i16, motor: &mut impl MotorDriver) {
-    let (alpha, beta) = park_transformation::inverse(0, i_q, angle);
-    let (voltage_a, voltage_b, voltage_c) = clarke_transformation::inverse(alpha, beta);
-    motor.set_voltages(voltage_a, voltage_b, voltage_c);
-}*/

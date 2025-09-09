@@ -797,7 +797,9 @@ name = "interface"
 version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
+ "embassy-sync",
  "error_set",
+ "fixed",
  "foc",
  "heapless 0.9.1",
  "shared",

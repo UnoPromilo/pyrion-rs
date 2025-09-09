@@ -58,7 +58,7 @@ mod tests {
         );
         let result = from_adc_to_current(input, &constants);
 
-        // At mid-scale, v_out ≈ 0, so current should be ≈ 0
+        // At mid-scale, v_out ≈ 0, so Current should be ≈ 0
         assert_eq!(result, Current::from_milliamps(0));
     }
 
@@ -133,7 +133,7 @@ mod tests {
         );
         constants.recalculate_mid_value(new_zero);
 
-        // At new zero, v_out ≈ 0, so current should be ≈ 0
+        // At new zero, v_out ≈ 0, so Current should be ≈ 0
         let result = from_adc_to_current(new_zero, &constants);
         assert_eq!(result, Current::from_milliamps(0));
     }

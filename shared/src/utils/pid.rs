@@ -40,25 +40,25 @@ impl<T: FixedSigned> Default for Controller<T> {
 }
 
 impl<T: FixedSigned> Controller<T> {
-    pub fn set_p(mut self, p: T, limit: Option<T>) -> Self {
+    pub fn set_p(&mut self, p: T, limit: Option<T>) -> &mut Self {
         self.kp = p;
         self.p_limit = limit;
         self
     }
 
-    pub fn set_i(mut self, i: T, limit: Option<T>) -> Self {
+    pub fn set_i(&mut self, i: T, limit: Option<T>) -> &mut Self {
         self.ki = i;
         self.i_limit = limit;
         self
     }
 
-    pub fn set_d(mut self, d: T, limit: Option<T>) -> Self {
+    pub fn set_d(&mut self, d: T, limit: Option<T>) -> &mut Self {
         self.kd = d;
         self.d_limit = limit;
         self
     }
 
-    pub fn set_output_limit(mut self, limit: Option<T>) -> Self {
+    pub fn set_output_limit(&mut self, limit: Option<T>) -> &mut Self {
         self.output_limit = limit;
         self
     }
@@ -84,8 +84,9 @@ impl<T: FixedSigned> Controller<T> {
         Self::apply_limit(p_term + i_term + d_term, self.output_limit)
     }
 
-    pub fn set_target(&mut self, target: T) {
+    pub fn set_target(&mut self, target: T) -> &mut Self {
         self.target = target;
+        self
     }
 
     pub fn reset(&mut self) {
@@ -117,7 +118,8 @@ mod tests {
 
     #[test]
     fn proportional_only() {
-        let mut c = Controller::<I32F32>::default().set_p(I32F32::from_num(2), None);
+        let mut c = Controller::<I32F32>::default();
+        c.set_p(I32F32::from_num(2), None);
 
         c.set_target(I32F32::from_num(10));
         c.update(I32F32::from_num(8));
@@ -129,8 +131,8 @@ mod tests {
 
     #[test]
     fn integral_accumulates() {
-        let mut c = Controller::<I32F32>::default()
-            .set_p(I32F32::from_num(0), None)
+        let mut c = Controller::<I32F32>::default();
+        c.set_p(I32F32::from_num(0), None)
             .set_i(I32F32::from_num(2), None);
 
         c.set_target(I32F32::from_num(10));
@@ -143,8 +145,8 @@ mod tests {
 
     #[test]
     fn derivative_response() {
-        let mut c = Controller::<I32F32>::default()
-            .set_p(I32F32::from_num(0), None)
+        let mut c = Controller::<I32F32>::default();
+        c.set_p(I32F32::from_num(0), None)
             .set_d(I32F32::from_num(2), None);
 
         c.set_target(I32F32::from_num(10));
@@ -158,8 +160,8 @@ mod tests {
 
     #[test]
     fn p_limit_applied() {
-        let mut c =
-            Controller::<I32F32>::default().set_p(I32F32::from_num(10), Some(I32F32::from_num(5)));
+        let mut c = Controller::<I32F32>::default();
+        c.set_p(I32F32::from_num(10), Some(I32F32::from_num(5)));
 
         c.set_target(I32F32::from_num(10));
         let output = c.update(I32F32::from_num(0));
@@ -168,17 +170,18 @@ mod tests {
 
     #[test]
     fn i_limit_applied() {
-        let mut c = Controller::<I32F32>::default()
-            .set_p(I32F32::from_num(0), None)
-            .set_i(I32F32::from_num(10), Some(I32F32::from_num(5)));
-        c.set_target(I32F32::from_num(10));
+        let mut c = Controller::<I32F32>::default();
+        c.set_p(I32F32::from_num(0), None)
+            .set_i(I32F32::from_num(10), Some(I32F32::from_num(5)))
+            .set_target(I32F32::from_num(10));
         let output = c.update(I32F32::from_num(0));
         assert_eq!(I32F32::from_num(5.0), output);
     }
 
     #[test]
     fn output_limit_applied() {
-        let mut c = Controller::<I32F32>::default().set_output_limit(Some(I32F32::from_num(3.0)));
+        let mut c = Controller::<I32F32>::default();
+        c.set_output_limit(Some(I32F32::from_num(3.0)));
 
         c.set_target(I32F32::from_num(10.0));
         let output = c.update(I32F32::from_num(0.0));

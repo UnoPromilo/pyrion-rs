@@ -42,7 +42,7 @@ impl Motor {
             if let Ok(mut current_mutex) = self.current.try_lock() {
                 *current_mutex = Some(phase_current);
             } else {
-                warn!("Skipping the current update because motor is busy")
+                warn!("Skipping the Current update because motor is busy")
             }
         }
     }
@@ -59,7 +59,7 @@ impl PhaseCurrent {
     fn from_output(output: current_sensor::Output) -> Self {
         match output {
             current_sensor::Output::TwoPhases(a, b) => Self { a, b, c: -a - b },
-            //TODO add logic about calculating third current if low duty cycle to improve accuracy
+            //TODO add logic about calculating third Current if low duty cycle to improve accuracy
             current_sensor::Output::ThreePhases(a, b, c) => Self { a, b, c },
         }
     }
