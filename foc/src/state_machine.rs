@@ -11,7 +11,7 @@ use shared::info;
 use shared::units::angle::Electrical;
 use shared::units::{Angle, Current, Velocity};
 
-const LOOP_FREQUENCY: Duration = Duration::from_hz(20_000);
+const LOOP_FREQUENCY: Duration = Duration::from_hz(1_000);
 const STATE_LOOP_DIVIDER: u32 = 40; // 500Hz
 const PID_LOOP_DIVIDER: u32 = 10; // 2000Hz
 

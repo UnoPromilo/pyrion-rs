@@ -1,5 +1,5 @@
-use embassy_rp::Peri;
-use embassy_rp::peripherals::*;
+use embassy_stm32::Peri;
+use embassy_stm32::peripherals::{I2C1, PA10, PA14, PA15, PA8, PA9, PB10, PB11, PB13, PB14, PB15, PB7, PB8, PC0, PC1, PC2};
 use shared::units::{Resistance, Voltage};
 
 pub struct HardwareConfig {
@@ -8,28 +8,22 @@ pub struct HardwareConfig {
     pub i2c: Option<I2cConfig>,
     pub angle_sensor: AngleSensorConfig,
     pub uart: Option<UartConfig>,
-    pub core1: Peri<'static, CORE1>,
 }
 
 pub struct MotorConfig {
-    pub a_slice: Peri<'static, PWM_SLICE1>,
-    pub a_high: Peri<'static, PIN_2>,
-    pub a_low: Peri<'static, PIN_3>,
+    pub a_high: Peri<'static, PA8>,
+    pub b_high: Peri<'static, PA9>,
+    pub c_high: Peri<'static, PA10>,
 
-    pub b_slice: Peri<'static, PWM_SLICE2>,
-    pub b_high: Peri<'static, PIN_4>,
-    pub b_low: Peri<'static, PIN_5>,
-
-    pub c_slice: Peri<'static, PWM_SLICE3>,
-    pub c_high: Peri<'static, PIN_6>,
-    pub c_low: Peri<'static, PIN_7>,
+    pub a_low: Peri<'static, PB13>,
+    pub b_low: Peri<'static, PB14>,
+    pub c_low: Peri<'static, PB15>,
 }
 
 pub struct CurrentConfig {
-    pub adc: Peri<'static, ADC>,
-    pub phase_a: Peri<'static, PIN_26>,
-    pub phase_b: Peri<'static, PIN_27>,
-    pub phase_c: Peri<'static, PIN_28>,
+    pub phase_a: Peri<'static, PC0>,
+    pub phase_b: Peri<'static, PC1>,
+    pub phase_c: Peri<'static, PC2>,
     pub current_measurement_config: CurrentMeasurementConfig,
 }
 
@@ -40,9 +34,9 @@ pub struct CurrentMeasurementConfig {
 }
 
 pub struct I2cConfig {
-    pub i2c: Peri<'static, I2C0>,
-    pub sda: Peri<'static, PIN_16>,
-    pub scl: Peri<'static, PIN_17>,
+    pub i2c: Peri<'static, I2C1>,
+    pub sda: Peri<'static, PA14>,
+    pub scl: Peri<'static, PA15>,
 }
 
 pub enum AngleSensorConfig {
@@ -52,34 +46,27 @@ pub enum AngleSensorConfig {
 }
 
 pub struct UartConfig {
-    pub uart: Peri<'static, UART0>,
-    pub tx: Peri<'static, PIN_0>,
-    pub rx: Peri<'static, PIN_1>,
-    pub tx_dma: Peri<'static, DMA_CH0>,
-    pub rx_dma: Peri<'static, DMA_CH1>,
+    pub uart: Peri<'static, embassy_stm32::peripherals::USART3>,
+    pub tx: Peri<'static, PB10>,
+    pub rx: Peri<'static, PB11>,
 }
 
 impl HardwareConfig {
     pub fn rp2040() -> Self {
-        let p = embassy_rp::init(Default::default());
+        let p = embassy_stm32::init(Default::default());
         Self {
-            core1: p.CORE1,
             motor: MotorConfig {
-                a_slice: p.PWM_SLICE1,
-                a_high: p.PIN_2,
-                a_low: p.PIN_3,
-                b_slice: p.PWM_SLICE2,
-                b_high: p.PIN_4,
-                b_low: p.PIN_5,
-                c_slice: p.PWM_SLICE3,
-                c_high: p.PIN_6,
-                c_low: p.PIN_7,
+                a_high: p.PA8,
+                a_low: p.PB13,
+                b_high: p.PA9,
+                b_low: p.PB14,
+                c_high: p.PA10,
+                c_low: p.PB15,
             },
             current: Some(CurrentConfig {
-                adc: p.ADC,
-                phase_a: p.PIN_26,
-                phase_b: p.PIN_27,
-                phase_c: p.PIN_28,
+                phase_a: p.PC0,
+                phase_b: p.PC1,
+                phase_c: p.PC2,
                 current_measurement_config: CurrentMeasurementConfig {
                     gain: 20,
                     v_ref: Voltage::from_millivolts(3300),
@@ -87,17 +74,15 @@ impl HardwareConfig {
                 },
             }),
             i2c: Some(I2cConfig {
-                i2c: p.I2C0,
-                scl: p.PIN_17,
-                sda: p.PIN_16,
+                i2c: p.I2C1,
+                sda: p.PA14,
+                scl: p.PA15,
             }),
             angle_sensor: AngleSensorConfig::As5600,
             uart: Some(UartConfig {
-                uart: p.UART0,
-                tx: p.PIN_0,
-                rx: p.PIN_1,
-                tx_dma: p.DMA_CH0,
-                rx_dma: p.DMA_CH1,
+                uart: p.USART3,
+                tx: p.PB10,
+                rx: p.PB11,
             }),
         }
     }

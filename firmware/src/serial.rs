@@ -58,19 +58,14 @@ async fn read_with_echo_to_break<'u, 'b>(
 ) -> Result<usize, uart::ReadToBreakError> {
     let mut len = 0;
     while len < buffer.len() {
-        info!("Reading from UART");
-        // read one byte
         uart.read(&mut buffer[len..len + 1])
             .await
             .map_err(uart::ReadToBreakError::Other)?;
 
-        // stop if a newline detected
         if buffer[len] == b'\n' || buffer[len] == b'\r' {
             break;
         }
 
-        info!("Echoing to UART");
-        // echo it back immediately
         uart.write(&buffer[len..len + 1])
             .await
             .map_err(uart::ReadToBreakError::Other)?;

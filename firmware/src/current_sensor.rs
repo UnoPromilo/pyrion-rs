@@ -1,7 +1,6 @@
+use embassy_stm32::adc::Adc;
+use embassy_stm32::Peri;
 use crate::config::{CurrentConfig, CurrentMeasurementConfig};
-use embassy_rp::adc::{Adc, AdcPin, Blocking};
-use embassy_rp::gpio::Pull;
-use embassy_rp::{Peri, adc, bind_interrupts};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Receiver, Sender};
 use embassy_time::Timer;
@@ -12,18 +11,14 @@ use foc::functions::adc_conversion::{
 use hardware_abstraction::current_sensor::{CurrentReader, Output, RawOutput};
 use shared::{info, warn};
 
-bind_interrupts!(struct Irqs {
-    ADC_IRQ_FIFO => adc::InterruptHandler;
-});
-
 pub struct ThreePhaseCurrentSensor<'a, 'b> {
     pub trigger: ThreePhaseCurrentTrigger<'a, 'b>,
     pub reader: ThreePhaseCurrentReader<'a>,
 }
 
-pub struct ThreePhaseCurrentTrigger<'a, 'b> {
+pub struct ThreePhaseCurrentTrigger<'a, 'b, > {
     tx: Sender<'a, CriticalSectionRawMutex, [u16; 3], 4>,
-    adc: Adc<'b, Blocking>,
+    adc: Adc<'b, ADC1>,
     channels: [adc::Channel<'b>; 3],
     buffer: [u16; 3],
 }
