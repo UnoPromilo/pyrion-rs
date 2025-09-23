@@ -1,5 +1,5 @@
 [workspace]
-members = ["as5600", "interface", "firmware", "hardware_abstraction", "foc", "shared"]
+members = ["as5600", "firmware", "hardware_abstraction", "foc", "shared"]
 resolver = "3"
 
 [profile.release]
