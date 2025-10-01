@@ -244,9 +244,9 @@ dependencies = [
 
 [[package]]
 name = "embassy-executor"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c80c92a31c7f6b02a938f10feea17ea3cc0e8d33bcac7f3fe8cede3723bb56"
+checksum = "06070468370195e0e86f241c8e5004356d696590a678d47d6676795b2e439c6b"
 dependencies = [
  "cortex-m",
  "critical-section",
@@ -532,6 +532,7 @@ dependencies = [
  "portable-atomic",
  "shared",
  "static_cell",
+ "stm32-metapac",
 ]
 
 [[package]]
