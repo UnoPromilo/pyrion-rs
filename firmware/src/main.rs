@@ -1,8 +1,9 @@
 #![no_std]
 #![no_main]
 
+use crate::advanced_adc::AdvancedAdc;
 use crate::advanced_adc::injected::{ExternalTriggerConversionSourceADC12, TriggerADC12};
-use crate::advanced_adc::{AdvancedAdc, ExternalTriggerEdge};
+use crate::advanced_adc::trigger_edge::ExternalTriggerEdge;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::Config;
