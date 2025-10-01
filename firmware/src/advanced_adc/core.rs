@@ -2,7 +2,7 @@ use crate::advanced_adc::pac_instance::PacInstance;
 use crate::advanced_adc::prescaler::Prescaler;
 use crate::advanced_adc::{injected, regular};
 use core::marker::PhantomData;
-use embassy_stm32::adc::Instance;
+use embassy_stm32::adc::{Instance, Temperature, TemperatureChannel, VrefChannel, VrefInt};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{Peri, peripherals, rcc};
 use embassy_time::{Duration, block_for};
@@ -181,7 +181,7 @@ impl Into<Exten> for ExternalTriggerEdge {
 
 impl<'d, T> AdvancedAdc<'d, T>
 where
-    T: Instance + PacInstance,
+    T: PacInstance,
 {
     pub fn new(adc: Peri<'d, T>, config: Config) -> Self {
         rcc::enable_and_reset::<T>();
@@ -225,6 +225,20 @@ where
         }
     }
 }
+/*
+TODO
+impl Drop for VrefInt {
+    fn drop(&mut self) {
+        T::disable_vrefint();
+    }
+}
+
+impl Drop for Temperature {
+    fn drop(&mut self) {
+        T::disable_temperature();
+    }
+}
+*/
 
 impl<'d, T: Adc12Instance, R> AdvancedAdc<'d, T, Free, R> {
     pub fn configure_injected_adc12(
@@ -280,6 +294,34 @@ impl<'d, T: Instance, I> AdvancedAdc<'d, T, I, Free> {
     }
 }
 
+// TODO make this compile time check instead of runtime panic
+impl<'d, T: Instance, R, I> AdvancedAdc<'d, T, I, R> {
+    pub fn enable_vrefint(&self) -> VrefInt
+    where
+        T: VrefChannel + PacInstance,
+    {
+        if T::is_vrefint_enabled() {
+            panic!("Vrefint is already enabled");
+        }
+        T::enable_vrefint();
+
+        VrefInt {}
+    }
+
+    /// Enable reading the temperature internal channel.
+    pub fn enable_temperature(&self) -> Temperature
+    where
+        T: TemperatureChannel + PacInstance,
+    {
+        if T::is_temperature_enabled() {
+            panic!("Temperature is already enabled");
+        }
+        T::enable_temperature();
+
+        Temperature {}
+    }
+}
+
 trait RegManipulations {
     fn power_up();
     fn set_difsel_all(val: Difsel);
@@ -298,6 +340,10 @@ trait RegManipulations {
     fn set_regular_oversampling_modes(regular_mode: Rovsm, triggered_mode: Trovs);
     fn set_regular_oversampling_enabled(val: bool);
     fn set_injected_oversampling_enabled(val: bool);
+    fn is_vrefint_enabled() -> bool;
+    fn is_temperature_enabled() -> bool;
+    fn enable_vrefint();
+    fn enable_temperature();
 }
 
 impl<T: PacInstance> RegManipulations for T {
@@ -436,5 +482,21 @@ impl<T: PacInstance> RegManipulations for T {
 
     fn set_injected_oversampling_enabled(val: bool) {
         T::regs().cfgr2().modify(|reg| reg.set_jovse(val));
+    }
+
+    fn is_vrefint_enabled() -> bool {
+        T::common_regs().ccr().read().vrefen()
+    }
+
+    fn is_temperature_enabled() -> bool {
+        T::common_regs().ccr().read().vsenseen()
+    }
+
+    fn enable_vrefint() {
+        T::common_regs().ccr().modify(|reg| reg.set_vrefen(true));
+    }
+
+    fn enable_temperature() {
+        T::common_regs().ccr().modify(|reg| reg.set_vsenseen(true))
     }
 }

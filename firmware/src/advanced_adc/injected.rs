@@ -6,6 +6,15 @@ use stm32_metapac::adc::vals::{Adstp, Exten, SampleTime};
 
 pub trait Trigger: Copy + Default + Into<AnyTriggerSource> {}
 
+// TODO a macro?
+pub struct ConstU<const N: usize>;
+
+pub trait Channels {}
+impl Channels for ConstU<1> {}
+impl Channels for ConstU<2> {}
+impl Channels for ConstU<3> {}
+impl Channels for ConstU<4> {}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Config<T: Trigger> {
     pub trigger: T,
@@ -24,13 +33,20 @@ impl<I: PacInstance> Configured<I> {
         }
     }
 
-    pub fn start_single_channel(
+    pub fn start<const CHANNELS: usize>(
         self,
-        channel: AnyAdcChannel<I>,
-        sample_time: SampleTime,
-    ) -> Running<I> {
-        I::set_channel_sample_time(channel.get_hw_channel(), sample_time);
-        I::register_channels([channel.get_hw_channel()].into_iter());
+        values: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
+    ) -> Running<I, CHANNELS>
+    where
+        ConstU<CHANNELS>: Channels,
+    {
+        I::set_length(CHANNELS as u8);
+        // if CHANNELS == 1 { todo!()}
+        for (index, (channel, sample_time)) in values.iter().enumerate() {
+            I::set_channel_sample_time(channel, *sample_time);
+            I::register_channel(channel, index);
+        }
+
         I::start();
         Running::new()
     }
@@ -42,11 +58,11 @@ impl<I: PacInstance> Configured<I> {
     }
 }
 
-pub struct Running<I: PacInstance> {
+pub struct Running<I: PacInstance, const CHANNELS: usize> {
     _phantom: PhantomData<I>,
 }
 
-impl<I: PacInstance> Running<I> {
+impl<I: PacInstance, const CHANNELS: usize> Running<I, CHANNELS> {
     fn new() -> Self {
         Self {
             _phantom: PhantomData,
@@ -60,8 +76,12 @@ impl<I: PacInstance> Running<I> {
     }
 
     /// Reads the value of the latest conversion
-    pub fn read_now(&self) -> u16 {
-        I::read_value(0)
+    pub fn read_now(&self) -> [u16; CHANNELS] {
+        let mut values = [0; CHANNELS];
+        for i in 0..CHANNELS {
+            values[i] = I::read_value(i);
+        }
+        values
     }
 }
 
@@ -75,12 +95,13 @@ impl<T: Trigger> Default for Config<T> {
 
 trait RegManipulations {
     fn set_trigger(trigger: impl Trigger);
-    fn start();
-    fn stop();
-    fn set_channel_sample_time(channel: u8, sample_time: SampleTime);
-    fn register_channels(sequence: impl ExactSizeIterator<Item = u8>);
-    fn read_value(index: usize) -> u16;
     fn set_auto_conversion_mode(enabled: bool);
+    fn set_length(length: u8);
+    fn set_channel_sample_time<C>(channel: &AnyAdcChannel<C>, sample_time: SampleTime);
+    fn register_channel<C>(channel: &AnyAdcChannel<C>, index: usize);
+    fn start();
+    fn read_value(index: usize) -> u16;
+    fn stop();
 }
 
 impl<T: PacInstance> RegManipulations for T {
@@ -108,45 +129,45 @@ impl<T: PacInstance> RegManipulations for T {
         }
     }
 
-    fn start() {
-        Self::regs().cr().modify(|regs| regs.set_jadstart(true));
+    fn set_auto_conversion_mode(enabled: bool) {
+        Self::regs().cfgr().modify(|regs| regs.set_jauto(enabled));
     }
 
-    fn stop() {
-        Self::regs()
-            .cr()
-            .modify(|regs| regs.set_jadstp(Adstp::STOP));
+    fn set_length(length: u8) {
+        Self::regs().jsqr().modify(|reg| reg.set_jl(length));
     }
 
-    fn set_channel_sample_time(channel: u8, sample_time: SampleTime) {
+    fn set_channel_sample_time<C>(channel: &AnyAdcChannel<C>, sample_time: SampleTime) {
+        let channel = channel.get_hw_channel() as usize;
         if channel <= 9 {
             Self::regs()
                 .smpr()
-                .modify(|reg| reg.set_smp(channel as _, sample_time));
+                .modify(|reg| reg.set_smp(channel, sample_time));
         } else {
             Self::regs()
                 .smpr2()
-                .modify(|reg| reg.set_smp((channel - 10) as _, sample_time));
+                .modify(|reg| reg.set_smp(channel - 10, sample_time));
         }
     }
 
-    fn register_channels(sequence: impl ExactSizeIterator<Item = u8>) {
-        assert!(sequence.len() > 0);
-        assert!(sequence.len() <= 4);
-        Self::regs().jsqr().modify(|reg| {
-            reg.set_jl(sequence.len() as u8);
-            for (index, channel) in sequence.enumerate() {
-                reg.set_jsq(index, channel)
-            }
-        });
+    fn register_channel<C>(channel: &AnyAdcChannel<C>, index: usize) {
+        Self::regs()
+            .jsqr()
+            .modify(|reg| reg.set_jsq(index, channel.get_hw_channel()));
+    }
+
+    fn start() {
+        Self::regs().cr().modify(|regs| regs.set_jadstart(true));
     }
 
     fn read_value(index: usize) -> u16 {
         Self::regs().jdr(index).read().jdata()
     }
 
-    fn set_auto_conversion_mode(enabled: bool) {
-        Self::regs().cfgr().modify(|regs| regs.set_jauto(enabled));
+    fn stop() {
+        Self::regs()
+            .cr()
+            .modify(|regs| regs.set_jadstp(Adstp::STOP));
     }
 }
 

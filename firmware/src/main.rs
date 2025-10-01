@@ -6,7 +6,7 @@ use crate::advanced_adc::{AdvancedAdc, ExternalTriggerEdge};
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::Config;
-use embassy_stm32::adc::{AdcChannel, SampleTime};
+use embassy_stm32::adc::{Adc, AdcChannel, SampleTime, Temperature, VrefInt};
 use embassy_stm32::gpio::OutputType;
 use embassy_stm32::time::khz;
 use embassy_stm32::timer::Channel;
@@ -80,12 +80,26 @@ async fn main(_spawner: Spawner) {
         ..Default::default()
     };
 
-    let adc = AdvancedAdc::new(p.ADC2, adc_config);
+    let adc = AdvancedAdc::new(p.ADC1, adc_config);
     let (adc, injected) = adc.configure_injected_adc12(injected_config);
-    let injected = injected.start_single_channel(p.PA0.degrade_adc(), SampleTime::CYCLES6_5);
+    let temp_channel = adc.enable_temperature();
+    let v_ref = adc.enable_vrefint();
+    let injected = injected.start([
+        (p.PA0.degrade_adc(), SampleTime::CYCLES6_5),
+        (p.PA1.degrade_adc(), SampleTime::CYCLES6_5),
+        (temp_channel.degrade_adc(), SampleTime::CYCLES6_5),
+        (v_ref.degrade_adc(), SampleTime::CYCLES6_5),
+        /*(p.PA3.degrade_adc(), SampleTime::CYCLES6_5),
+        (p.PB13.degrade_adc(), SampleTime::CYCLES6_5),
+        (p.PB13.degrade_adc(), SampleTime::CYCLES6_5),*/
+    ]);
 
     loop {
-        info!("Value: {}", injected.read_now());
+        let values = injected.read_now();
+        info!(
+            "PA0: {}, PA1: {}, Temp: {}, V_ref: {}",
+            values[0], values[1], values[2], values[3]
+        );
         Timer::after(Duration::from_millis(100)).await;
     }
     //let (adc, regular) = adc.configure_regular_adc12(Default::default());
@@ -128,5 +142,6 @@ async fn main(_spawner: Spawner) {
         info!("V ref int: {}", v_ref);
 
         Timer::after_millis(100).await;
-    }*/
+    }
+    */
 }
