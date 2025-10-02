@@ -1,31 +1,56 @@
 use crate::advanced_adc::config::Config;
+use crate::advanced_adc::injected::configured::{Continuous, Single};
 use crate::advanced_adc::pac::RegManipulations;
 use crate::advanced_adc::pac_instance::PacInstance;
 use crate::advanced_adc::prescaler::Prescaler;
-use crate::advanced_adc::{injected, regular};
+use crate::advanced_adc::state::WithState;
+use crate::advanced_adc::trigger_edge::ExtTriggerEdge;
+use crate::advanced_adc::{EndOfConversionSignal, injected, regular};
 use core::marker::PhantomData;
-use embassy_stm32::adc::{Instance, Temperature, TemperatureChannel, VrefChannel, VrefInt};
+use embassy_stm32::adc::{Temperature, TemperatureChannel, VrefChannel, VrefInt};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{Peri, peripherals, rcc};
 use shared::trace;
 use stm32_metapac::adc::vals::{Adcaldif, Difsel};
 use stm32_metapac::adccommon::vals::Presc;
+// TODO add analog watchdog
 
-pub trait Adc12Instance: PacInstance {}
-pub trait Adc345Instance: PacInstance {}
+pub trait AdcFamily {
+    type InjectedExtTrigger: injected::IntoAnyExtTrigger;
+}
+pub struct Family12;
+pub struct Family345;
 
-// blanket impls for the specific types
-impl Adc12Instance for peripherals::ADC1 {}
-impl Adc12Instance for peripherals::ADC2 {}
+impl AdcFamily for Family12 {
+    type InjectedExtTrigger = injected::ExtTriggerSourceADC12;
+}
+impl AdcFamily for Family345 {
+    type InjectedExtTrigger = injected::ExtTriggerSourceADC345;
+}
 
-impl Adc345Instance for peripherals::ADC3 {}
-impl Adc345Instance for peripherals::ADC4 {}
-impl Adc345Instance for peripherals::ADC5 {}
+pub trait AdcInstance: PacInstance + WithState {
+    type Family: AdcFamily;
+}
+macro_rules! adc_instance {
+    ($($adc:ident => $family:ty),+) => {
+        $(impl AdcInstance for peripherals::$adc {
+            type Family = $family;
+        })+
+    }
+}
+
+adc_instance!(
+    ADC1 => Family12,
+    ADC2 => Family12,
+    ADC3 => Family345,
+    ADC4 => Family345,
+    ADC5 => Family345
+);
 
 pub struct Free;
 pub struct Taken;
 
-pub struct AdvancedAdc<'d, T: Instance, I = Free, R = Free> {
+pub struct AdvancedAdc<'d, T: AdcInstance, I = Free, R = Free> {
     #[allow(unused)]
     adc: Peri<'d, T>,
 
@@ -34,7 +59,7 @@ pub struct AdvancedAdc<'d, T: Instance, I = Free, R = Free> {
 
 impl<'d, T> AdvancedAdc<'d, T>
 where
-    T: PacInstance,
+    T: AdcInstance,
 {
     pub fn new(adc: Peri<'d, T>, config: Config) -> Self {
         rcc::enable_and_reset::<T>();
@@ -52,9 +77,9 @@ where
         T::enable();
         T::configure_single_conv_soft_trigger();
         T::set_resolution(config.resolution);
-        T::set_end_of_conversion_signal_regular(config.end_of_conversion_signal_regular);
-        T::set_end_of_conversion_signal_injected(config.end_of_conversion_signal_injected);
-        T::set_data_align(config.align_left);
+        T::set_end_of_conversion_signal_regular(EndOfConversionSignal::None);
+        T::set_end_of_conversion_signal_injected(EndOfConversionSignal::None);
+        T::set_data_align(config.dataline_alignment);
         T::set_gain_compensation(config.gain_compensation);
         T::set_low_power_auto_wait_mode(config.enable_low_power_auto_wait);
         T::set_dma_config(config.dma_config);
@@ -93,27 +118,50 @@ impl Drop for Temperature {
 }
 */
 
-impl<'d, T: Adc12Instance, R> AdvancedAdc<'d, T, Free, R> {
-    #[allow(dead_code)]
-    pub fn configure_injected_adc12(
+impl<'d, T: AdcInstance, R> AdvancedAdc<'d, T, Free, R> {
+    pub fn configure_injected_ext_trigger(
         self,
-        config: injected::Config<injected::TriggerADC12>,
-    ) -> (AdvancedAdc<'d, T, Taken, R>, injected::Configured<T>) {
-        (self.take_injected(), injected::Configured::new(config))
+        trigger: <T::Family as AdcFamily>::InjectedExtTrigger,
+        edge: ExtTriggerEdge,
+        config: injected::Config,
+    ) -> (
+        AdvancedAdc<'d, T, Taken, R>,
+        injected::Configured<T, Continuous>,
+    ) {
+        (
+            self.take_injected(),
+            injected::Configured::new_triggered(
+                injected::IntoAnyExtTrigger::into(trigger, edge),
+                config,
+            ),
+        )
+    }
+
+    pub fn configure_injected_auto(
+        self,
+        config: injected::Config,
+    ) -> (
+        AdvancedAdc<'d, T, Taken, R>,
+        injected::Configured<T, Continuous>,
+    ) {
+        (self.take_injected(), injected::Configured::new_auto(config))
+    }
+
+    pub fn configure_injected_single_conversion(
+        self,
+        config: injected::Config,
+    ) -> (
+        AdvancedAdc<'d, T, Taken, R>,
+        injected::Configured<T, Single>,
+    ) {
+        (
+            self.take_injected(),
+            injected::Configured::new_single(config),
+        )
     }
 }
 
-impl<'d, T: Adc345Instance, R> AdvancedAdc<'d, T, Free, R> {
-    #[allow(dead_code)]
-    pub fn configure_injected_adc345(
-        self,
-        config: injected::Config<injected::TriggerADC345>,
-    ) -> (AdvancedAdc<'d, T, Taken, R>, injected::Configured<T>) {
-        (self.take_injected(), injected::Configured::new(config))
-    }
-}
-
-impl<'d, T: Instance, R> AdvancedAdc<'d, T, Free, R> {
+impl<'d, T: AdcInstance, R> AdvancedAdc<'d, T, Free, R> {
     fn take_injected(self) -> AdvancedAdc<'d, T, Taken, R> {
         AdvancedAdc {
             adc: self.adc,
@@ -122,7 +170,8 @@ impl<'d, T: Instance, R> AdvancedAdc<'d, T, Free, R> {
     }
 }
 
-impl<'d, T: Adc12Instance, I> AdvancedAdc<'d, T, I, Free> {
+// TODO merge into single function
+impl<'d, T: AdcInstance<Family = Family12>, I> AdvancedAdc<'d, T, I, Free> {
     #[allow(dead_code)]
     pub fn configure_regular_adc12(
         self,
@@ -132,7 +181,7 @@ impl<'d, T: Adc12Instance, I> AdvancedAdc<'d, T, I, Free> {
     }
 }
 
-impl<'d, T: Adc345Instance, I> AdvancedAdc<'d, T, I, Free> {
+impl<'d, T: AdcInstance<Family = Family345>, I> AdvancedAdc<'d, T, I, Free> {
     #[allow(dead_code)]
     pub fn configure_regular_adc345(
         self,
@@ -142,7 +191,7 @@ impl<'d, T: Adc345Instance, I> AdvancedAdc<'d, T, I, Free> {
     }
 }
 
-impl<'d, T: Instance, I> AdvancedAdc<'d, T, I, Free> {
+impl<'d, T: AdcInstance, I> AdvancedAdc<'d, T, I, Free> {
     fn take_regular(self) -> AdvancedAdc<'d, T, I, Taken> {
         AdvancedAdc {
             adc: self.adc,
@@ -152,7 +201,7 @@ impl<'d, T: Instance, I> AdvancedAdc<'d, T, I, Free> {
 }
 
 // TODO make this compile time check instead of runtime panic
-impl<'d, T: PacInstance, R, I> AdvancedAdc<'d, T, I, R> {
+impl<'d, T: AdcInstance, R, I> AdvancedAdc<'d, T, I, R> {
     pub fn enable_vrefint(&self) -> VrefInt
     where
         T: VrefChannel,

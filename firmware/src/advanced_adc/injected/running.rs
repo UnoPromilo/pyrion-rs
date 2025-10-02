@@ -1,23 +1,23 @@
+use crate::advanced_adc::AdcInstance;
+use crate::advanced_adc::injected::configured;
 use crate::advanced_adc::injected::configured::Configured;
 use crate::advanced_adc::injected::pac::{ModifyPac, ReadPac};
-use crate::advanced_adc::pac_instance::PacInstance;
-use core::marker::PhantomData;
-use defmt::info;
+use embassy_stm32::adc::AnyAdcChannel;
 
-pub struct Running<I: PacInstance, const CHANNELS: usize> {
-    _phantom: PhantomData<I>,
+pub struct Running<I: AdcInstance, const CHANNELS: usize> {
+    configured: Configured<I, configured::Continuous>,
+    channels: [AnyAdcChannel<I>; CHANNELS],
 }
 
-impl<I: PacInstance, const CHANNELS: usize> Running<I, CHANNELS> {
-    pub(crate) fn new(_val: Configured<I>) -> Self {
+impl<I: AdcInstance, const CHANNELS: usize> Running<I, CHANNELS> {
+    pub(crate) fn new(
+        configured: Configured<I, configured::Continuous>,
+        channels: [AnyAdcChannel<I>; CHANNELS],
+    ) -> Self {
         Self {
-            _phantom: PhantomData,
+            configured,
+            channels,
         }
-    }
-
-    pub fn stop(self) -> Configured<I> {
-        Self::destruct();
-        Configured::downgrade(self)
     }
 
     /// Reads the value of the latest conversion
@@ -29,18 +29,21 @@ impl<I: PacInstance, const CHANNELS: usize> Running<I, CHANNELS> {
         values
     }
 
-    // TODO do I need this?
-    fn destruct() {
-        info!("Działa destroy");
-        I::stop();
+    pub async fn read_next(&self) -> [u16; CHANNELS] {
+        todo!("wait for the next conversion, then read")
     }
-}
 
-impl<I: PacInstance, const CHANNELS: usize> Drop for Running<I, CHANNELS> {
-    // TODO do I need to do it in stop?
-    fn drop(&mut self) {
+    pub fn stop(self) -> Configured<I, configured::Continuous> {
         I::stop();
-        info!("Działa drop");
-        Self::destruct()
+        self.configured
+    }
+
+    pub fn release(
+        self,
+    ) -> (
+        Configured<I, configured::Continuous>,
+        [AnyAdcChannel<I>; CHANNELS],
+    ) {
+        (self.configured, self.channels)
     }
 }

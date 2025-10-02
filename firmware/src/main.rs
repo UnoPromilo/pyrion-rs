@@ -1,25 +1,32 @@
 #![no_std]
 #![no_main]
 
-use crate::advanced_adc::AdvancedAdc;
-use crate::advanced_adc::injected::{ExternalTriggerConversionSourceADC12, TriggerADC12};
-use crate::advanced_adc::trigger_edge::ExternalTriggerEdge;
+use crate::advanced_adc::injected::ExtTriggerSourceADC12;
+use crate::advanced_adc::trigger_edge::ExtTriggerEdge;
+use crate::advanced_adc::{AdvancedAdc, InterruptHandler};
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_stm32::Config;
-use embassy_stm32::adc::{Adc, AdcChannel, SampleTime, Temperature, VrefInt};
+use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::gpio::OutputType;
+use embassy_stm32::peripherals::ADC1;
 use embassy_stm32::time::khz;
 use embassy_stm32::timer::Channel;
 use embassy_stm32::timer::complementary_pwm::{ComplementaryPwm, ComplementaryPwmPin};
 use embassy_stm32::timer::low_level::CountingMode;
 use embassy_stm32::timer::simple_pwm::PwmPin;
+use embassy_stm32::{Config, Peripherals, bind_interrupts};
 use embassy_time::{Duration, Timer};
 use stm32_metapac::timer::vals::Mms;
 #[allow(unused_imports)]
 use {defmt_rtt as _, panic_probe as _};
 
 mod advanced_adc;
+
+bind_interrupts!(
+    struct Irqs {
+        ADC1_2 => InterruptHandler<ADC1>;
+    }
+);
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -69,40 +76,9 @@ async fn main(_spawner: Spawner) {
             .modify(|reg| reg.set_mms(Mms::COMPARE_OC4))
     }
 
-    let adc_config = advanced_adc::Config {
-        ..Default::default()
-    };
+    read_injected_trigger_source(unsafe { Peripherals::steal() }).await;
 
-    let injected_config = advanced_adc::injected::Config {
-        trigger: TriggerADC12::External(
-            ExternalTriggerConversionSourceADC12::T1_TRGO,
-            ExternalTriggerEdge::Rising,
-        ),
-        ..Default::default()
-    };
-
-    let adc = AdvancedAdc::new(p.ADC1, adc_config);
-    let (adc, injected) = adc.configure_injected_adc12(injected_config);
-    let temp_channel = adc.enable_temperature();
-    let v_ref = adc.enable_vrefint();
-    let injected = injected.start([
-        (p.PA0.degrade_adc(), SampleTime::CYCLES6_5),
-        (p.PA1.degrade_adc(), SampleTime::CYCLES6_5),
-        (temp_channel.degrade_adc(), SampleTime::CYCLES6_5),
-        (v_ref.degrade_adc(), SampleTime::CYCLES6_5),
-        /*(p.PA3.degrade_adc(), SampleTime::CYCLES6_5),
-        (p.PB13.degrade_adc(), SampleTime::CYCLES6_5),
-        (p.PB13.degrade_adc(), SampleTime::CYCLES6_5),*/
-    ]);
-
-    loop {
-        let values = injected.read_now();
-        info!(
-            "PA0: {}, PA1: {}, Temp: {}, V_ref: {}",
-            values[0], values[1], values[2], values[3]
-        );
-        Timer::after(Duration::from_millis(100)).await;
-    }
+    //let mut adc = Adc::new(p.ADC2);
     //let (adc, regular) = adc.configure_regular_adc12(Default::default());
     /*let mut adc = Adc::new(p.ADC1);
     adc.set_sample_time(SampleTime::CYCLES24_5);
@@ -145,4 +121,67 @@ async fn main(_spawner: Spawner) {
         Timer::after_millis(100).await;
     }
     */
+}
+
+async fn read_injected_trigger_source(p: Peripherals) {
+    let adc_config = advanced_adc::Config {
+        ..Default::default()
+    };
+    let adc = AdvancedAdc::new(p.ADC1, adc_config);
+
+    let (adc, injected) = adc.configure_injected_ext_trigger(
+        ExtTriggerSourceADC12::T1_TRGO,
+        ExtTriggerEdge::Rising,
+        Default::default(),
+    );
+    let temp_channel = adc.enable_temperature();
+    let v_ref = adc.enable_vrefint();
+    let injected = injected.start([
+        (p.PA0.degrade_adc(), SampleTime::CYCLES6_5),
+        (p.PA1.degrade_adc(), SampleTime::CYCLES6_5),
+        (temp_channel.degrade_adc(), SampleTime::CYCLES6_5),
+        (v_ref.degrade_adc(), SampleTime::CYCLES6_5),
+    ]);
+    loop {
+        let values = injected.read_now();
+        info!(
+            "PA0: {}, PA1: {}, Temp: {}, V_ref: {}",
+            values[0], values[1], values[2], values[3]
+        );
+        Timer::after(Duration::from_millis(100)).await;
+    }
+}
+
+async fn read_single_conversion_source(p: Peripherals) {
+    let adc_config = advanced_adc::Config {
+        ..Default::default()
+    };
+    let adc = AdvancedAdc::new(p.ADC1, adc_config);
+
+    let (adc, mut injected) = adc.configure_injected_single_conversion(Default::default());
+    let temp_channel = adc.enable_temperature();
+    let v_ref = adc.enable_vrefint();
+    let mut pa0 = p.PA0.degrade_adc();
+    let mut pa1 = p.PA1.degrade_adc();
+    let mut temp = temp_channel.degrade_adc();
+    let mut v_ref = v_ref.degrade_adc();
+
+    loop {
+        let values = injected
+            .read(
+                [
+                    (&mut pa0, SampleTime::CYCLES6_5),
+                    (&mut pa1, SampleTime::CYCLES6_5),
+                    (&mut temp, SampleTime::CYCLES6_5),
+                    (&mut v_ref, SampleTime::CYCLES6_5),
+                ],
+                Irqs,
+            )
+            .await;
+        info!(
+            "PA0: {}, PA1: {}, Temp: {}, V_ref: {}",
+            values[0], values[1], values[2], values[3]
+        );
+        Timer::after(Duration::from_millis(100)).await;
+    }
 }

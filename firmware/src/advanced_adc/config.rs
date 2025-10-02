@@ -3,10 +3,8 @@ use stm32_metapac::adc::vals::{Dmacfg, Ovrmod, Res, Rovsm, Trovs};
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub resolution: Res,
-    pub align_left: bool,
+    pub dataline_alignment: DataAlignment,
     pub gain_compensation: GainCompensation,
-    pub end_of_conversion_signal_regular: EndOfConversionSignal,
-    pub end_of_conversion_signal_injected: EndOfConversionSignal,
     pub dma_config: Dmacfg,
     pub overrun_mode: Ovrmod,
     pub oversampling_config: OversamplingConfig,
@@ -27,10 +25,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             resolution: Res::BITS12,
-            align_left: false,
+            dataline_alignment: DataAlignment::Right,
             gain_compensation: GainCompensation::zero(),
-            end_of_conversion_signal_regular: EndOfConversionSignal::None,
-            end_of_conversion_signal_injected: EndOfConversionSignal::None,
             dma_config: Dmacfg::ONE_SHOT,
             overrun_mode: Ovrmod::PRESERVE,
             oversampling_config: Default::default(),
@@ -52,8 +48,16 @@ impl Default for OversamplingConfig {
     }
 }
 
+pub const MAX_GAIN: u16 = 0x3FFF;
 #[derive(Debug, Clone, Copy)]
 pub struct GainCompensation(pub u16);
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum DataAlignment {
+    Right = 0,
+    Left = 1,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum EndOfConversionSignal {
@@ -63,6 +67,7 @@ pub enum EndOfConversionSignal {
     Both,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum OversamplingRatio {
     Ratio2 = 0,
@@ -75,6 +80,7 @@ pub enum OversamplingRatio {
     Ratio256 = 7,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub enum OversamplingShift {
     None = 0,
@@ -102,11 +108,20 @@ impl From<OversamplingShift> for u8 {
     }
 }
 
+impl From<DataAlignment> for bool {
+    #[inline(always)]
+    fn from(val: DataAlignment) -> Self {
+        match val {
+            DataAlignment::Right => false,
+            DataAlignment::Left => true,
+        }
+    }
+}
+
 impl GainCompensation {
     pub const fn from_bytes(val: u16) -> Self {
-        const MAX: u16 = 0x3FFF;
         assert!(
-            val <= MAX,
+            val <= MAX_GAIN,
             "The gain compensation value must be in the range from 0 to 0x3FFF"
         );
         Self(val)
@@ -115,13 +130,12 @@ impl GainCompensation {
     #[allow(dead_code)]
     pub const fn from(val: f32) -> Self {
         const MAX: f32 = 3.999756;
-        const SCALE: u16 = 0x3FFF;
 
         assert!(
             val >= 0.0 && val <= MAX,
             "The gain compensation value must be in the range from 0 to 3.999756"
         );
-        Self::from_bytes((val / MAX * SCALE as f32) as u16)
+        Self::from_bytes((val / MAX * MAX_GAIN as f32) as u16)
     }
 
     pub const fn zero() -> Self {

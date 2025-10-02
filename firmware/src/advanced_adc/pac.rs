@@ -1,5 +1,5 @@
 use crate::advanced_adc::config::{
-    EndOfConversionSignal, GainCompensation, OversamplingRatio, OversamplingShift,
+    DataAlignment, EndOfConversionSignal, GainCompensation, OversamplingRatio, OversamplingShift,
 };
 use crate::advanced_adc::pac_instance::PacInstance;
 use embassy_time::{Duration, block_for};
@@ -14,7 +14,9 @@ pub trait RegManipulations {
     fn set_resolution(val: Res);
     fn set_end_of_conversion_signal_regular(val: EndOfConversionSignal);
     fn set_end_of_conversion_signal_injected(val: EndOfConversionSignal);
-    fn set_data_align(left: bool);
+    fn clear_end_of_conversion_signal_regular(val: EndOfConversionSignal);
+    fn clear_end_of_conversion_signal_injected(val: EndOfConversionSignal);
+    fn set_data_align(val: DataAlignment);
     fn set_gain_compensation(val: GainCompensation);
     fn set_low_power_auto_wait_mode(enabled: bool);
     fn set_dma_config(val: Dmacfg);
@@ -79,7 +81,6 @@ impl<T: PacInstance> RegManipulations for T {
         Self::regs().cfgr().modify(|reg| reg.set_res(val));
     }
 
-    // TODO split into two, injected and regular
     fn set_end_of_conversion_signal_regular(val: EndOfConversionSignal) {
         Self::regs().ier().modify(|reg| match val {
             EndOfConversionSignal::None => {
@@ -122,9 +123,41 @@ impl<T: PacInstance> RegManipulations for T {
         });
     }
 
-    fn set_data_align(left: bool) {
+    fn clear_end_of_conversion_signal_regular(val: EndOfConversionSignal) {
+        Self::regs().isr().modify(|reg| match val {
+            EndOfConversionSignal::None => {}
+            EndOfConversionSignal::Single => {
+                reg.set_eoc(true);
+            }
+            EndOfConversionSignal::Sequence => {
+                reg.set_eos(true);
+            }
+            EndOfConversionSignal::Both => {
+                reg.set_eoc(true);
+                reg.set_eos(true);
+            }
+        });
+    }
+
+    fn clear_end_of_conversion_signal_injected(val: EndOfConversionSignal) {
+        Self::regs().isr().modify(|reg| match val {
+            EndOfConversionSignal::None => {}
+            EndOfConversionSignal::Single => {
+                reg.set_jeoc(true);
+            }
+            EndOfConversionSignal::Sequence => {
+                reg.set_jeos(true);
+            }
+            EndOfConversionSignal::Both => {
+                reg.set_jeoc(true);
+                reg.set_jeos(true);
+            }
+        });
+    }
+
+    fn set_data_align(val: DataAlignment) {
         Self::regs().cfgr().modify(|reg| {
-            reg.set_align(left);
+            reg.set_align(val.into());
         });
     }
 
@@ -146,40 +179,42 @@ impl<T: PacInstance> RegManipulations for T {
     }
 
     fn set_common_oversampling(shift: OversamplingShift, ratio: OversamplingRatio) {
-        T::regs().cfgr2().modify(|reg| {
+        Self::regs().cfgr2().modify(|reg| {
             reg.set_ovss(shift.into());
             reg.set_ovsr(ratio.into());
         });
     }
 
     fn set_regular_oversampling_modes(regular_mode: Rovsm, triggered_mode: Trovs) {
-        T::regs().cfgr2().modify(|reg| {
+        Self::regs().cfgr2().modify(|reg| {
             reg.set_rovsm(regular_mode.into());
             reg.set_trovs(triggered_mode.into());
         });
     }
 
     fn set_regular_oversampling_enabled(val: bool) {
-        T::regs().cfgr2().modify(|reg| reg.set_rovse(val));
+        Self::regs().cfgr2().modify(|reg| reg.set_rovse(val));
     }
 
     fn set_injected_oversampling_enabled(val: bool) {
-        T::regs().cfgr2().modify(|reg| reg.set_jovse(val));
+        Self::regs().cfgr2().modify(|reg| reg.set_jovse(val));
     }
 
     fn is_vrefint_enabled() -> bool {
-        T::common_regs().ccr().read().vrefen()
+        Self::common_regs().ccr().read().vrefen()
     }
 
     fn is_temperature_enabled() -> bool {
-        T::common_regs().ccr().read().vsenseen()
+        Self::common_regs().ccr().read().vsenseen()
     }
 
     fn enable_vrefint() {
-        T::common_regs().ccr().modify(|reg| reg.set_vrefen(true));
+        Self::common_regs().ccr().modify(|reg| reg.set_vrefen(true));
     }
 
     fn enable_temperature() {
-        T::common_regs().ccr().modify(|reg| reg.set_vsenseen(true))
+        Self::common_regs()
+            .ccr()
+            .modify(|reg| reg.set_vsenseen(true))
     }
 }

@@ -1,4 +1,4 @@
-use crate::advanced_adc::trigger_edge::ExternalTriggerEdge;
+use crate::advanced_adc::trigger_edge::ExtTriggerEdge;
 
 pub trait Trigger: Copy + Default {}
 
@@ -7,7 +7,7 @@ pub trait Trigger: Copy + Default {}
 pub enum TriggerADC12 {
     #[default]
     Software,
-    External(ExternalTriggerConversionSourceADC12, ExternalTriggerEdge),
+    External(ExternalTriggerConversionSourceADC12, ExtTriggerEdge),
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -15,7 +15,7 @@ pub enum TriggerADC12 {
 pub enum TriggerADC345 {
     #[default]
     Software,
-    External(ExternalTriggerConversionSourceADC345, ExternalTriggerEdge),
+    External(ExternalTriggerConversionSourceADC345, ExtTriggerEdge),
 }
 
 #[repr(u8)]

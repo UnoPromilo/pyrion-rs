@@ -42,12 +42,19 @@ impl Prescaler for Presc {
 mod tests {
     use super::*;
 
-    pub fn from_kernel_clock_test_should_never_return_more_than_max_adc_clk_freq() {
-        let max_freq = MAX_ADC_CLK_FREQ;
-        for i in 0..340 {
-            let freq = Hertz::mhz(i);
+    #[test]
+    fn prescaler_never_exceeds_max_adc_clk() {
+        for mhz in 1..=340 {
+            let freq = Hertz::mhz(mhz);
             let prescaler = Presc::from_kernel_clock(freq);
-            assert!(prescaler.divisor() <= max_freq.0);
+            let adc_clk = freq.0 / prescaler.divisor();
+            assert!(
+                adc_clk <= MAX_ADC_CLK_FREQ.0,
+                "freq={}MHz, prescaler={:?}, adc_clk={}",
+                mhz,
+                prescaler,
+                adc_clk
+            );
         }
     }
 }
