@@ -37,6 +37,8 @@ impl<I: AdcInstance> Configured<I, Continuous> {
         I::set_ext_trigger(trigger);
         I::set_discontinuous_mode(false);
         I::set_auto_conversion_mode(false);
+        I::clear_end_of_conversion_signal_injected(EndOfConversionSignal::Both);
+        I::set_end_of_conversion_signal_injected(EndOfConversionSignal::Sequence);
         Self {
             _phantom: PhantomData,
         }
@@ -46,6 +48,8 @@ impl<I: AdcInstance> Configured<I, Continuous> {
         I::set_software_trigger();
         I::set_discontinuous_mode(false);
         I::set_auto_conversion_mode(true);
+        I::clear_end_of_conversion_signal_injected(EndOfConversionSignal::Both);
+        I::set_end_of_conversion_signal_injected(EndOfConversionSignal::Sequence);
         Self {
             _phantom: PhantomData,
         }
@@ -54,21 +58,12 @@ impl<I: AdcInstance> Configured<I, Continuous> {
     pub fn start<const CHANNELS: usize>(
         self,
         values: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
-    ) -> Running<I, CHANNELS>
+        _irq: impl Binding<I::Interrupt, InterruptHandler<I>>,
+    ) -> Running<I, Continuous, CHANNELS>
     where
         channels::ConstU<CHANNELS>: channels::Channels,
     {
-        I::set_length(CHANNELS as u8);
-        // if CHANNELS == 1 { todo!()}
-        for (index, (channel, sample_time)) in values.iter().enumerate() {
-            I::set_channel_sample_time(channel, *sample_time);
-            I::register_channel(channel, index);
-        }
-
-        // TODO clear isr.ovr?
-        I::start();
-        let channels = values.map(|(ch, _)| ch);
-        Running::new(self, channels)
+        Running::<I, Continuous, CHANNELS>::new(self, values)
     }
 }
 impl<I: AdcInstance> Configured<I, Single> {
@@ -81,36 +76,14 @@ impl<I: AdcInstance> Configured<I, Single> {
         }
     }
 
-    pub async fn read<const CHANNELS: usize>(
-        &mut self,
-        values: [(&mut AnyAdcChannel<I>, SampleTime); CHANNELS],
+    pub fn prepare<const CHANNELS: usize>(
+        self,
+        values: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
         _irq: impl Binding<I::Interrupt, InterruptHandler<I>>,
-    ) -> [u16; CHANNELS]
+    ) -> Running<I, Single, CHANNELS>
     where
         channels::ConstU<CHANNELS>: channels::Channels,
     {
-        I::set_length(CHANNELS as u8);
-        // if CHANNELS == 1 { todo!()}
-        for (index, (channel, sample_time)) in values.iter().enumerate() {
-            I::set_channel_sample_time(channel, *sample_time);
-            I::register_channel(channel, index);
-        }
-
-        // TODO clear isr.ovr?
-        // TODO set jeosen
-        I::clear_end_of_conversion_signal_injected(EndOfConversionSignal::Both);
-        I::set_end_of_conversion_signal_injected(EndOfConversionSignal::Sequence);
-        I::start();
-        let result = I::state().jeos_signal.wait().await;
-
-        let mut output = [0; CHANNELS];
-        for (index, value) in result.iter().enumerate() {
-            output[index] = *value;
-        }
-
-        I::stop();
-        // reset
-        I::set_end_of_conversion_signal_injected(EndOfConversionSignal::None);
-        output
+        Running::<I, Single, CHANNELS>::new(self, values)
     }
 }

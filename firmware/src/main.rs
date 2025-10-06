@@ -15,7 +15,7 @@ use embassy_stm32::timer::complementary_pwm::{ComplementaryPwm, ComplementaryPwm
 use embassy_stm32::timer::low_level::CountingMode;
 use embassy_stm32::timer::simple_pwm::PwmPin;
 use embassy_stm32::{Config, Peripherals, bind_interrupts};
-use embassy_time::{Duration, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use stm32_metapac::timer::vals::Mms;
 #[allow(unused_imports)]
 use {defmt_rtt as _, panic_probe as _};
@@ -48,7 +48,6 @@ async fn main(_spawner: Spawner) {
     }
     let p = embassy_stm32::init(config);
     info!("Hello World!");
-
     let mut pwm = ComplementaryPwm::new(
         p.TIM1,
         Some(PwmPin::new(p.PA8, OutputType::PushPull)),
@@ -77,7 +76,7 @@ async fn main(_spawner: Spawner) {
     }
 
     read_injected_trigger_source(unsafe { Peripherals::steal() }).await;
-
+    //read_single_conversion_source(unsafe { Peripherals::steal() }).await;
     //let mut adc = Adc::new(p.ADC2);
     //let (adc, regular) = adc.configure_regular_adc12(Default::default());
     /*let mut adc = Adc::new(p.ADC1);
@@ -136,19 +135,41 @@ async fn read_injected_trigger_source(p: Peripherals) {
     );
     let temp_channel = adc.enable_temperature();
     let v_ref = adc.enable_vrefint();
-    let injected = injected.start([
-        (p.PA0.degrade_adc(), SampleTime::CYCLES6_5),
-        (p.PA1.degrade_adc(), SampleTime::CYCLES6_5),
-        (temp_channel.degrade_adc(), SampleTime::CYCLES6_5),
-        (v_ref.degrade_adc(), SampleTime::CYCLES6_5),
-    ]);
+    let injected = injected.start(
+        [
+            (p.PA0.degrade_adc(), SampleTime::CYCLES2_5),
+            (p.PA1.degrade_adc(), SampleTime::CYCLES2_5),
+            //(temp_channel.degrade_adc(), SampleTime::CYCLES2_5),
+            //(v_ref.degrade_adc(), SampleTime::CYCLES2_5),
+        ],
+        Irqs,
+    );
+
+    let mut sum: [u128; 2] = [0; 2];
+    let mut count: u128 = 0;
+    let mut last_print = Instant::now();
+
     loop {
-        let values = injected.read_now();
-        info!(
-            "PA0: {}, PA1: {}, Temp: {}, V_ref: {}",
-            values[0], values[1], values[2], values[3]
-        );
-        Timer::after(Duration::from_millis(100)).await;
+        count += 1;
+        let values = injected.read_next().await;
+        for i in 0..2 {
+            sum[i] += values[i] as u128;
+        }
+
+        let elapsed = last_print.elapsed();
+
+        //info!("elapsed: {}", elapsed);
+        if elapsed > Duration::from_secs(1) {
+            info!(
+                "Freq: {}Hz, PA0: {}, PA1: {}",
+                count / elapsed.as_millis() as u128 * 1000,
+                sum[0] / count,
+                sum[1] / count,
+            );
+            last_print = Instant::now();
+            count = 0;
+            sum = [0; 2];
+        }
     }
 }
 
@@ -158,30 +179,27 @@ async fn read_single_conversion_source(p: Peripherals) {
     };
     let adc = AdvancedAdc::new(p.ADC1, adc_config);
 
-    let (adc, mut injected) = adc.configure_injected_single_conversion(Default::default());
-    let temp_channel = adc.enable_temperature();
-    let v_ref = adc.enable_vrefint();
-    let mut pa0 = p.PA0.degrade_adc();
-    let mut pa1 = p.PA1.degrade_adc();
-    let mut temp = temp_channel.degrade_adc();
-    let mut v_ref = v_ref.degrade_adc();
+    let (adc, injected) = adc.configure_injected_single_conversion(Default::default());
+    let temp = adc.enable_temperature().degrade_adc();
+    let v_ref = adc.enable_vrefint().degrade_adc();
+    let pa0 = p.PA0.degrade_adc();
+    let pa1 = p.PA1.degrade_adc();
+    let injected = injected.prepare(
+        [
+            (pa1, SampleTime::CYCLES6_5),
+            (pa0, SampleTime::CYCLES6_5),
+            (temp, SampleTime::CYCLES6_5),
+            (v_ref, SampleTime::CYCLES6_5),
+        ],
+        Irqs,
+    );
 
     loop {
-        let values = injected
-            .read(
-                [
-                    (&mut pa0, SampleTime::CYCLES6_5),
-                    (&mut pa1, SampleTime::CYCLES6_5),
-                    (&mut temp, SampleTime::CYCLES6_5),
-                    (&mut v_ref, SampleTime::CYCLES6_5),
-                ],
-                Irqs,
-            )
-            .await;
+        let values = injected.trigger_and_read().await;
         info!(
-            "PA0: {}, PA1: {}, Temp: {}, V_ref: {}",
+            "PA0: {}, PA1: {}, Temp: {}, V_ref:{} ",
             values[0], values[1], values[2], values[3]
         );
-        Timer::after(Duration::from_millis(100)).await;
+        Timer::after(Duration::from_millis(500)).await;
     }
 }
