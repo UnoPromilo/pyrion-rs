@@ -1,28 +1,16 @@
 use crate::advanced_adc::trigger_edge::ExtTriggerEdge;
 
-pub trait Trigger: Copy + Default {}
-
-#[derive(Debug, Copy, Clone, Default)]
-#[allow(dead_code)]
-pub enum TriggerADC12 {
-    #[default]
-    Software,
-    External(ExternalTriggerConversionSourceADC12, ExtTriggerEdge),
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-#[allow(dead_code)]
-pub enum TriggerADC345 {
-    #[default]
-    Software,
-    External(ExternalTriggerConversionSourceADC345, ExtTriggerEdge),
+#[derive(Debug, Copy, Clone)]
+pub enum AnyExtTrigger {
+    ADC12(ExtTriggerSourceADC12, ExtTriggerEdge),
+    ADC345(ExtTriggerSourceADC345, ExtTriggerEdge),
 }
 
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
-pub enum ExternalTriggerConversionSourceADC12 {
+pub enum ExtTriggerSourceADC12 {
     T1_CC1 = 0,
     T1_CC2 = 1,
     T1_CC3 = 2,
@@ -60,7 +48,7 @@ pub enum ExternalTriggerConversionSourceADC12 {
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
-pub enum ExternalTriggerConversionSourceADC345 {
+pub enum ExtTriggerSourceADC345 {
     T3_CC1 = 0,
     T2_CC3 = 1,
     T1_CC3 = 2,
@@ -94,5 +82,30 @@ pub enum ExternalTriggerConversionSourceADC345 {
     T7_TRGO = 30,
 }
 
-impl Trigger for TriggerADC12 {}
-impl Trigger for TriggerADC345 {}
+pub trait IntoAnyExtTrigger {
+    fn into(self, edge: ExtTriggerEdge) -> AnyExtTrigger;
+}
+
+impl IntoAnyExtTrigger for ExtTriggerSourceADC12 {
+    fn into(self, edge: ExtTriggerEdge) -> AnyExtTrigger {
+        AnyExtTrigger::ADC12(self, edge)
+    }
+}
+
+impl IntoAnyExtTrigger for ExtTriggerSourceADC345 {
+    fn into(self, edge: ExtTriggerEdge) -> AnyExtTrigger {
+        AnyExtTrigger::ADC345(self, edge)
+    }
+}
+
+impl Into<u8> for ExtTriggerSourceADC12 {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
+impl Into<u8> for ExtTriggerSourceADC345 {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}

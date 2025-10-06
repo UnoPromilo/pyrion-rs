@@ -1,4 +1,4 @@
-use crate::advanced_adc::{AdcInstance, injected};
+use crate::{AdcInstance, injected};
 use core::marker::PhantomData;
 use embassy_stm32::interrupt;
 

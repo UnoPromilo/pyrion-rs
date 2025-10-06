@@ -1,7 +1,5 @@
-use crate::advanced_adc::config::{
-    DataAlignment, EndOfConversionSignal, GainCompensation, OversamplingRatio, OversamplingShift,
-};
-use crate::advanced_adc::pac_instance::PacInstance;
+use crate::pac_instance::PacInstance;
+use crate::{DataAlignment, GainCompensation, OversamplingRatio, OversamplingShift};
 use embassy_time::{Duration, block_for};
 use stm32_metapac::adc::vals::{Adcaldif, Difsel, Dmacfg, Exten, Ovrmod, Res, Rovsm, Trovs};
 
@@ -12,10 +10,7 @@ pub trait RegManipulations {
     fn enable();
     fn configure_single_conv_soft_trigger();
     fn set_resolution(val: Res);
-    fn set_end_of_conversion_signal_regular(val: EndOfConversionSignal);
-    fn set_end_of_conversion_signal_injected(val: EndOfConversionSignal);
-    fn clear_end_of_conversion_signal_regular(val: EndOfConversionSignal);
-    fn clear_end_of_conversion_signal_injected(val: EndOfConversionSignal);
+
     fn set_data_align(val: DataAlignment);
     fn set_gain_compensation(val: GainCompensation);
     fn set_low_power_auto_wait_mode(enabled: bool);
@@ -27,8 +22,10 @@ pub trait RegManipulations {
     fn set_injected_oversampling_enabled(val: bool);
     fn is_vrefint_enabled() -> bool;
     fn is_temperature_enabled() -> bool;
+    fn is_vbat_enabled() -> bool;
     fn enable_vrefint();
     fn enable_temperature();
+    fn enable_vbat();
 }
 
 impl<T: PacInstance> RegManipulations for T {
@@ -79,80 +76,6 @@ impl<T: PacInstance> RegManipulations for T {
 
     fn set_resolution(val: Res) {
         Self::regs().cfgr().modify(|reg| reg.set_res(val));
-    }
-
-    fn set_end_of_conversion_signal_regular(val: EndOfConversionSignal) {
-        Self::regs().ier().modify(|reg| match val {
-            EndOfConversionSignal::None => {
-                reg.set_eosie(false);
-                reg.set_eocie(false);
-            }
-            EndOfConversionSignal::Single => {
-                reg.set_eosie(false);
-                reg.set_eocie(true);
-            }
-            EndOfConversionSignal::Sequence => {
-                reg.set_eosie(true);
-                reg.set_eocie(false);
-            }
-            EndOfConversionSignal::Both => {
-                reg.set_eosie(true);
-                reg.set_eocie(true);
-            }
-        });
-    }
-
-    fn set_end_of_conversion_signal_injected(val: EndOfConversionSignal) {
-        Self::regs().ier().modify(|reg| match val {
-            EndOfConversionSignal::None => {
-                reg.set_jeosie(false);
-                reg.set_jeocie(false);
-            }
-            EndOfConversionSignal::Single => {
-                reg.set_jeosie(false);
-                reg.set_jeocie(true);
-            }
-            EndOfConversionSignal::Sequence => {
-                reg.set_jeosie(true);
-                reg.set_jeocie(false);
-            }
-            EndOfConversionSignal::Both => {
-                reg.set_jeosie(true);
-                reg.set_jeocie(true);
-            }
-        });
-    }
-
-    fn clear_end_of_conversion_signal_regular(val: EndOfConversionSignal) {
-        Self::regs().isr().modify(|reg| match val {
-            EndOfConversionSignal::None => {}
-            EndOfConversionSignal::Single => {
-                reg.set_eoc(true);
-            }
-            EndOfConversionSignal::Sequence => {
-                reg.set_eos(true);
-            }
-            EndOfConversionSignal::Both => {
-                reg.set_eoc(true);
-                reg.set_eos(true);
-            }
-        });
-    }
-
-    fn clear_end_of_conversion_signal_injected(val: EndOfConversionSignal) {
-        Self::regs().isr().modify(|reg| match val {
-            EndOfConversionSignal::None => {}
-            EndOfConversionSignal::Single => {
-                reg.set_jeoc(true);
-            }
-            EndOfConversionSignal::Sequence => {
-                reg.set_jeos(true);
-            }
-            EndOfConversionSignal::Both => {
-                reg.set_jeoc(true);
-                reg.set_jeos(true);
-            }
-        });
     }
 
     fn set_data_align(val: DataAlignment) {
@@ -208,6 +131,10 @@ impl<T: PacInstance> RegManipulations for T {
         Self::common_regs().ccr().read().vsenseen()
     }
 
+    fn is_vbat_enabled() -> bool {
+        Self::common_regs().ccr().read().vbaten()
+    }
+
     fn enable_vrefint() {
         Self::common_regs().ccr().modify(|reg| reg.set_vrefen(true));
     }
@@ -216,5 +143,9 @@ impl<T: PacInstance> RegManipulations for T {
         Self::common_regs()
             .ccr()
             .modify(|reg| reg.set_vsenseen(true))
+    }
+
+    fn enable_vbat() {
+        Self::common_regs().ccr().modify(|reg| reg.set_vbaten(true))
     }
 }

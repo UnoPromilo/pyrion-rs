@@ -1,45 +1,14 @@
-use crate::advanced_adc::injected::configured::{Configured, Continuous, ConversionMode, Single};
-use crate::advanced_adc::injected::pac::{ModifyPac, ReadPac};
-use crate::advanced_adc::pac::RegManipulations;
-use crate::advanced_adc::{AdcInstance, EndOfConversionSignal};
+use crate::injected::Configured;
+use crate::injected::pac::{ModifyPac, ReadPac};
+use crate::{AdcInstance, Continuous, EndOfConversionSignal, Single};
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Interrupt;
 use shared::trace;
 use stm32_metapac::adc::vals::SampleTime;
 
-pub struct Running<I: AdcInstance, C: ConversionMode, const CHANNELS: usize> {
+pub struct Running<I: AdcInstance, C, const CHANNELS: usize> {
     configured: Configured<I, C>,
     channels: [AnyAdcChannel<I>; CHANNELS],
-}
-
-impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
-    pub(crate) fn new(
-        configured: Configured<I, Continuous>,
-        values: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
-    ) -> Self {
-        let instance = Self::inner_new(configured, values);
-        I::start();
-
-        instance
-    }
-
-    /// Reads the value of the latest conversion
-    pub fn read_now(&self) -> [u16; CHANNELS] {
-        let mut values = [0; CHANNELS];
-        for i in 0..CHANNELS {
-            values[i] = I::read_value(i);
-        }
-        values
-    }
-
-    pub async fn read_next(&self) -> [u16; CHANNELS] {
-        let result = I::state().jeos_signal.wait().await;
-        let mut values = [0; CHANNELS];
-        for i in 0..CHANNELS {
-            values[i] = result[i]
-        }
-        values
-    }
 }
 
 impl<I: AdcInstance, const CHANNELS: usize> Running<I, Single, CHANNELS> {
@@ -64,13 +33,38 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Single, CHANNELS> {
     }
 }
 
-impl<I: AdcInstance, C: ConversionMode, const CHANNELS: usize> Running<I, C, CHANNELS> {
-    pub fn release(self) -> (Configured<I, C>, [AnyAdcChannel<I>; CHANNELS]) {
-        I::stop();
-        I::set_end_of_conversion_signal_injected(EndOfConversionSignal::None);
-        (self.configured, self.channels)
+impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
+    pub(crate) fn new(
+        configured: Configured<I, Continuous>,
+        values: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
+    ) -> Self {
+        let instance = Self::inner_new(configured, values);
+        // TODO do not run if JAUTO = 1
+        I::start();
+
+        instance
     }
 
+    /// Reads the value of the latest conversion
+    pub fn read_now(&self) -> [u16; CHANNELS] {
+        let mut values = [0; CHANNELS];
+        for i in 0..CHANNELS {
+            values[i] = I::read_value(i);
+        }
+        values
+    }
+
+    pub async fn read_next(&self) -> [u16; CHANNELS] {
+        let result = I::state().jeos_signal.wait().await;
+        let mut values = [0; CHANNELS];
+        for i in 0..CHANNELS {
+            values[i] = result[i]
+        }
+        values
+    }
+}
+
+impl<I: AdcInstance, C, const CHANNELS: usize> Running<I, C, CHANNELS> {
     fn inner_new(
         configured: Configured<I, C>,
         values: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
@@ -90,13 +84,18 @@ impl<I: AdcInstance, C: ConversionMode, const CHANNELS: usize> Running<I, C, CHA
         }
         let channels = values.map(|(ch, _)| ch);
 
-        I::clear_end_of_conversion_signal_injected(EndOfConversionSignal::Both);
-        I::set_end_of_conversion_signal_injected(EndOfConversionSignal::Sequence);
+        I::clear_end_of_conversion_signal(EndOfConversionSignal::Both);
+        I::set_end_of_conversion_signal(EndOfConversionSignal::Sequence);
         unsafe { I::Interrupt::enable() }
 
         Self {
             configured,
             channels,
         }
+    }
+    pub fn release(self) -> (Configured<I, C>, [AnyAdcChannel<I>; CHANNELS]) {
+        I::stop();
+        I::set_end_of_conversion_signal(EndOfConversionSignal::None);
+        (self.configured, self.channels)
     }
 }

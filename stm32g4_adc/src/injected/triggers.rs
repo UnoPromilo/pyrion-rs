@@ -1,5 +1,7 @@
-use crate::advanced_adc::trigger_edge::ExtTriggerEdge;
+use crate::trigger_edge::ExtTriggerEdge;
+use core::convert::Into;
 
+#[derive(Debug, Copy, Clone)]
 pub enum AnyExtTrigger {
     ADC12(ExtTriggerSourceADC12, ExtTriggerEdge),
     ADC345(ExtTriggerSourceADC345, ExtTriggerEdge),

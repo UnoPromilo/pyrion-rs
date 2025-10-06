@@ -1,0 +1,17 @@
+[package]
+name = "stm32g4-adc"
+version = "0.1.0"
+edition = "2024"
+
+
+[features]
+log = ["shared/log", "embassy-sync/log", "embassy-time/log"]
+defmt = ["dep:defmt", "stm32-metapac/defmt", "embassy-stm32/defmt", "embassy-sync/defmt", "embassy-time/defmt", "shared/defmt"]
+
+[dependencies]
+defmt = { version = "1.0.1", optional = true }
+stm32-metapac = { version = "18.0.0", features = ["stm32g474re"] }
+embassy-stm32 = { version = "0.4.0", features = ["stm32g474re"] }
+embassy-sync = { version = "0.7.2" }
+embassy-time = { version = "0.5.0" }
+shared = { path = "../shared" }

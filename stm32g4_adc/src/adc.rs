@@ -1,13 +1,13 @@
-use crate::advanced_adc::config::Config;
-use crate::advanced_adc::injected::configured::{Continuous, Single};
-use crate::advanced_adc::pac::RegManipulations;
-use crate::advanced_adc::pac_instance::PacInstance;
-use crate::advanced_adc::prescaler::Prescaler;
-use crate::advanced_adc::state::WithState;
-use crate::advanced_adc::trigger_edge::ExtTriggerEdge;
-use crate::advanced_adc::{EndOfConversionSignal, injected, regular};
+use crate::pac::RegManipulations;
+use crate::pac_instance::PacInstance;
+use crate::prescaler::Prescaler;
+use crate::state::WithState;
+use crate::trigger_edge::ExtTriggerEdge;
+use crate::{Config, injected};
 use core::marker::PhantomData;
-use embassy_stm32::adc::{Temperature, TemperatureChannel, VrefChannel, VrefInt};
+use embassy_stm32::adc::{
+    Temperature, TemperatureChannel, VBatChannel, Vbat, VrefChannel, VrefInt,
+};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{Peri, peripherals, rcc};
 use shared::trace;
@@ -50,14 +50,18 @@ adc_instance!(
 pub struct Free;
 pub struct Taken;
 
-pub struct AdvancedAdc<'d, T: AdcInstance, I = Free, R = Free> {
+// TODO do I need traits for this?
+pub struct Single;
+pub struct Continuous;
+
+pub struct Adc<'d, T: AdcInstance, I = Free, R = Free> {
     #[allow(unused)]
     adc: Peri<'d, T>,
 
     _phantom_data: PhantomData<(I, R)>,
 }
 
-impl<'d, T> AdvancedAdc<'d, T>
+impl<'d, T> Adc<'d, T>
 where
     T: AdcInstance,
 {
@@ -77,8 +81,6 @@ where
         T::enable();
         T::configure_single_conv_soft_trigger();
         T::set_resolution(config.resolution);
-        T::set_end_of_conversion_signal_regular(EndOfConversionSignal::None);
-        T::set_end_of_conversion_signal_injected(EndOfConversionSignal::None);
         T::set_data_align(config.dataline_alignment);
         T::set_gain_compensation(config.gain_compensation);
         T::set_low_power_auto_wait_mode(config.enable_low_power_auto_wait);
@@ -116,61 +118,51 @@ impl Drop for Temperature {
         T::disable_temperature();
     }
 }
+
+impl Drop for Vbat {
+    fn drop(&mut self) {
+        T::disable_vbat();
+    }
+}
+
 */
 
-impl<'d, T: AdcInstance, R> AdvancedAdc<'d, T, Free, R> {
+impl<'d, T: AdcInstance, R> Adc<'d, T, Free, R> {
     pub fn configure_injected_ext_trigger(
         self,
         trigger: <T::Family as AdcFamily>::InjectedExtTrigger,
         edge: ExtTriggerEdge,
-        config: injected::Config,
-    ) -> (
-        AdvancedAdc<'d, T, Taken, R>,
-        injected::Configured<T, Continuous>,
-    ) {
+    ) -> (Adc<'d, T, Taken, R>, injected::Configured<T, Continuous>) {
         (
             self.take_injected(),
-            injected::Configured::new_triggered(
-                injected::IntoAnyExtTrigger::into(trigger, edge),
-                config,
-            ),
+            injected::Configured::new_triggered(injected::IntoAnyExtTrigger::into(trigger, edge)),
         )
     }
 
     pub fn configure_injected_auto(
         self,
-        config: injected::Config,
-    ) -> (
-        AdvancedAdc<'d, T, Taken, R>,
-        injected::Configured<T, Continuous>,
-    ) {
-        (self.take_injected(), injected::Configured::new_auto(config))
+    ) -> (Adc<'d, T, Taken, R>, injected::Configured<T, Continuous>) {
+        (self.take_injected(), injected::Configured::new_auto())
     }
 
     pub fn configure_injected_single_conversion(
         self,
-        config: injected::Config,
-    ) -> (
-        AdvancedAdc<'d, T, Taken, R>,
-        injected::Configured<T, Single>,
-    ) {
-        (
-            self.take_injected(),
-            injected::Configured::new_single(config),
-        )
+    ) -> (Adc<'d, T, Taken, R>, injected::Configured<T, Single>) {
+        (self.take_injected(), injected::Configured::new_single())
     }
 }
 
-impl<'d, T: AdcInstance, R> AdvancedAdc<'d, T, Free, R> {
-    fn take_injected(self) -> AdvancedAdc<'d, T, Taken, R> {
-        AdvancedAdc {
+impl<'d, T: AdcInstance, R> Adc<'d, T, Free, R> {
+    fn take_injected(self) -> Adc<'d, T, Taken, R> {
+        Adc {
             adc: self.adc,
             _phantom_data: PhantomData,
         }
     }
 }
 
-// TODO merge into single function
+// TODO
+/*
 impl<'d, T: AdcInstance<Family = Family12>, I> AdvancedAdc<'d, T, I, Free> {
     #[allow(dead_code)]
     pub fn configure_regular_adc12(
@@ -191,17 +183,18 @@ impl<'d, T: AdcInstance<Family = Family345>, I> AdvancedAdc<'d, T, I, Free> {
     }
 }
 
-impl<'d, T: AdcInstance, I> AdvancedAdc<'d, T, I, Free> {
-    fn take_regular(self) -> AdvancedAdc<'d, T, I, Taken> {
-        AdvancedAdc {
+
+impl<'d, T: AdcInstance, I> Adc<'d, T, I, Free> {
+    fn take_regular(self) -> Adc<'d, T, I, Taken> {
+        Adc {
             adc: self.adc,
             _phantom_data: PhantomData,
         }
     }
-}
+}*/
 
 // TODO make this compile time check instead of runtime panic
-impl<'d, T: AdcInstance, R, I> AdvancedAdc<'d, T, I, R> {
+impl<'d, T: AdcInstance, R, I> Adc<'d, T, I, R> {
     pub fn enable_vrefint(&self) -> VrefInt
     where
         T: VrefChannel,
@@ -214,7 +207,6 @@ impl<'d, T: AdcInstance, R, I> AdvancedAdc<'d, T, I, R> {
         VrefInt {}
     }
 
-    /// Enable reading the temperature internal channel.
     pub fn enable_temperature(&self) -> Temperature
     where
         T: TemperatureChannel,
@@ -225,5 +217,18 @@ impl<'d, T: AdcInstance, R, I> AdvancedAdc<'d, T, I, R> {
         T::enable_temperature();
 
         Temperature {}
+    }
+
+    pub fn enable_vbat(&self) -> Vbat
+    where
+        T: VBatChannel,
+    {
+        if T::is_vbat_enabled() {
+            panic!("Vbat is already enabled");
+        }
+
+        T::enable_vbat();
+
+        Vbat {}
     }
 }

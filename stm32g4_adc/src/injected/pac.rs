@@ -1,7 +1,8 @@
-use crate::advanced_adc::injected::triggers::AnyExtTrigger;
-use crate::advanced_adc::pac_instance::PacInstance;
+use crate::injected::AnyExtTrigger;
 use embassy_stm32::adc::AnyAdcChannel;
-use stm32_metapac::adc::vals::{Adstp, Dmacfg, Dmaen, Exten, SampleTime};
+use stm32_metapac::adc::vals::{Adstp, Exten, SampleTime};
+use crate::EndOfConversionSignal;
+use crate::pac_instance::PacInstance;
 
 pub trait ModifyPac {
     fn set_software_trigger();
@@ -11,8 +12,9 @@ pub trait ModifyPac {
     fn set_channel_sample_time<C>(channel: &AnyAdcChannel<C>, sample_time: SampleTime);
     fn register_channel<C>(channel: &AnyAdcChannel<C>, index: usize);
     fn set_discontinuous_mode(enabled: bool);
-    fn set_dma_config(value: Dmacfg);
-    fn set_dma_enable(enabled: bool);
+    fn set_end_of_conversion_signal(val: EndOfConversionSignal);
+    fn clear_end_of_conversion_signal(val: EndOfConversionSignal);
+
     fn start();
     fn stop();
 }
@@ -43,7 +45,7 @@ impl<T: PacInstance> ModifyPac for T {
     }
 
     fn set_auto_conversion_mode(enabled: bool) {
-        Self::regs().cfgr().modify(|regs| regs.set_jauto(enabled));
+        Self::regs().cfgr().modify(|reg| reg.set_jauto(enabled));
     }
 
     fn set_length(length: u8) {
@@ -73,16 +75,40 @@ impl<T: PacInstance> ModifyPac for T {
         Self::regs().cfgr().modify(|reg| reg.set_jdiscen(enabled));
     }
 
-    fn set_dma_config(value: Dmacfg) {
-        Self::regs().cfgr().modify(|reg| reg.set_dmacfg(value));
+    fn set_end_of_conversion_signal(val: EndOfConversionSignal) {
+        Self::regs().ier().modify(|reg| match val {
+            EndOfConversionSignal::None => {
+                reg.set_jeosie(false);
+                reg.set_jeocie(false);
+            }
+            EndOfConversionSignal::Single => {
+                reg.set_jeosie(false);
+                reg.set_jeocie(true);
+            }
+            EndOfConversionSignal::Sequence => {
+                reg.set_jeosie(true);
+                reg.set_jeocie(false);
+            }
+            EndOfConversionSignal::Both => {
+                reg.set_jeosie(true);
+                reg.set_jeocie(true);
+            }
+        });
     }
 
-    fn set_dma_enable(enabled: bool) {
-        Self::regs().cfgr().modify(|reg| {
-            reg.set_dmaen(match enabled {
-                true => Dmaen::ENABLE,
-                false => Dmaen::DISABLE,
-            })
+    fn clear_end_of_conversion_signal(val: EndOfConversionSignal) {
+        Self::regs().isr().modify(|reg| match val {
+            EndOfConversionSignal::None => {}
+            EndOfConversionSignal::Single => {
+                reg.set_jeoc(true);
+            }
+            EndOfConversionSignal::Sequence => {
+                reg.set_jeos(true);
+            }
+            EndOfConversionSignal::Both => {
+                reg.set_jeoc(true);
+                reg.set_jeos(true);
+            }
         });
     }
 
