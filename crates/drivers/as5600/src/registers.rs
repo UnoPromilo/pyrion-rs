@@ -14,8 +14,9 @@ pub enum Register {
     MPosHigh = 0x03,
     MPosLow = 0x04,
 }
-impl Into<u8> for Register {
-    fn into(self) -> u8 {
-        self as u8
+
+impl From<Register> for u8 {
+    fn from(value: Register) -> Self {
+        value as u8
     }
 }

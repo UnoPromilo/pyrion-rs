@@ -25,9 +25,7 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Single, CHANNELS> {
         I::stop();
 
         let mut values = [0; CHANNELS];
-        for i in 0..CHANNELS {
-            values[i] = result[i]
-        }
+        values[..CHANNELS].copy_from_slice(&result[..CHANNELS]);
         values
     }
 }

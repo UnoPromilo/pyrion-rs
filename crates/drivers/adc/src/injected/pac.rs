@@ -1,8 +1,8 @@
+use crate::EndOfConversionSignal;
 use crate::injected::AnyExtTrigger;
+use crate::pac_instance::PacInstance;
 use embassy_stm32::adc::AnyAdcChannel;
 use stm32_metapac::adc::vals::{Adstp, Exten, SampleTime};
-use crate::EndOfConversionSignal;
-use crate::pac_instance::PacInstance;
 
 pub trait ModifyPac {
     fn set_software_trigger();

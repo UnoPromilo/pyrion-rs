@@ -6,7 +6,7 @@ use embassy_stm32::timer::simple_pwm::PwmPin;
 use embassy_stm32::timer::{
     AdvancedInstance4Channel, Ch1, Ch2, Ch4, Channel, TimerComplementaryPin, TimerPin,
 };
-use embassy_stm32::{pac, Peri};
+use embassy_stm32::{Peri, pac};
 use stm32_metapac::timer::vals::Mms;
 
 const TRGO_OFFSET: u16 = 2;
@@ -16,6 +16,7 @@ pub struct Inverter<'a, T: AdvancedInstance4Channel> {
 }
 
 impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         tim: Peri<'a, T>,
         ch_u: Peri<'a, impl TimerPin<T, Ch1>>,

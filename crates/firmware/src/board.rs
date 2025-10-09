@@ -4,7 +4,7 @@ use adc::{Adc, Continuous, InterruptHandler, Taken};
 use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, TIM1};
 use embassy_stm32::time::khz;
-use embassy_stm32::{bind_interrupts, Peripherals};
+use embassy_stm32::{Peripherals, bind_interrupts};
 use inverter::Inverter;
 
 bind_interrupts!(struct Irqs{

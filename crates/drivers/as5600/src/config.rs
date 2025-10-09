@@ -15,9 +15,9 @@ pub enum Hysteresis {
     LSB3 = 0b11,
 }
 
-impl Into<u8> for Hysteresis {
-    fn into(self) -> u8 {
-        (self as u8) << 2
+impl From<Hysteresis> for u8 {
+    fn from(value: Hysteresis) -> Self {
+        value as u8
     }
 }
 
@@ -30,9 +30,9 @@ pub enum SlowFilter {
     X2 = 0b11,
 }
 
-impl Into<u8> for SlowFilter {
-    fn into(self) -> u8 {
-        self as u8
+impl From<SlowFilter> for u8 {
+    fn from(value: SlowFilter) -> Self {
+        value as u8
     }
 }
 
@@ -49,14 +49,14 @@ pub enum FastFilterThreshold {
     LSB10 = 0b111,
 }
 
-impl Into<u8> for FastFilterThreshold {
-    fn into(self) -> u8 {
-        (self as u8) << 2
+impl From<FastFilterThreshold> for u8 {
+    fn from(value: FastFilterThreshold) -> Self {
+        (value as u8) << 2
     }
 }
 
-impl Config {
-    pub fn default() -> Self {
+impl Default for Config {
+    fn default() -> Self {
         Self {
             start_angle: 0,
             end_angle: 4095,
@@ -65,7 +65,9 @@ impl Config {
             slow_filter: SlowFilter::X8,
         }
     }
+}
 
+impl Config {
     pub fn get_low_config_byte(&self) -> u8 {
         self.hysteresis.into()
     }

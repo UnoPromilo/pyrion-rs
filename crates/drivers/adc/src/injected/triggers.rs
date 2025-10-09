@@ -1,5 +1,4 @@
 use crate::trigger_edge::ExtTriggerEdge;
-use core::convert::Into;
 
 #[derive(Debug, Copy, Clone)]
 pub enum AnyExtTrigger {
@@ -95,14 +94,14 @@ impl IntoAnyExtTrigger for ExtTriggerSourceADC345 {
     }
 }
 
-impl Into<u8> for ExtTriggerSourceADC12 {
-    fn into(self) -> u8 {
-        self as u8
+impl From<ExtTriggerSourceADC12> for u8 {
+    fn from(value: ExtTriggerSourceADC12) -> Self {
+        value as u8
     }
 }
 
-impl Into<u8> for ExtTriggerSourceADC345 {
-    fn into(self) -> u8 {
-        self as u8
+impl From<ExtTriggerSourceADC345> for u8 {
+    fn from(value: ExtTriggerSourceADC345) -> Self {
+        value as u8
     }
 }

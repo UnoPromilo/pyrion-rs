@@ -8,9 +8,9 @@ pub enum ExtTriggerEdge {
     Both,
 }
 
-impl Into<Exten> for ExtTriggerEdge {
-    fn into(self) -> Exten {
-        match self {
+impl From<ExtTriggerEdge> for Exten {
+    fn from(value: ExtTriggerEdge) -> Self {
+        match value {
             ExtTriggerEdge::Rising => Exten::RISING_EDGE,
             ExtTriggerEdge::Falling => Exten::FALLING_EDGE,
             ExtTriggerEdge::Both => Exten::BOTH_EDGES,

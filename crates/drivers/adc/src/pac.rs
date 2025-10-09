@@ -110,8 +110,8 @@ impl<T: PacInstance> RegManipulations for T {
 
     fn set_regular_oversampling_modes(regular_mode: Rovsm, triggered_mode: Trovs) {
         Self::regs().cfgr2().modify(|reg| {
-            reg.set_rovsm(regular_mode.into());
-            reg.set_trovs(triggered_mode.into());
+            reg.set_rovsm(regular_mode);
+            reg.set_trovs(triggered_mode);
         });
     }
 

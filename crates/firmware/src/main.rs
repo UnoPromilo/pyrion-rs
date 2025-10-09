@@ -4,7 +4,6 @@ use embassy_executor::Spawner;
 
 mod board;
 
-
 #[allow(unused_imports)]
 use {defmt_rtt as _, panic_probe as _};
 
