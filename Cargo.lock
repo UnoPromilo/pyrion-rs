@@ -3,6 +3,18 @@
 version = 4
 
 [[package]]
+name = "adc"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "embassy-stm32",
+ "embassy-sync",
+ "embassy-time",
+ "logging",
+ "stm32-metapac",
+]
+
+[[package]]
 name = "aligned"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -26,7 +38,7 @@ version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
  "embedded-hal-async",
- "shared",
+ "logging",
 ]
 
 [[package]]
@@ -514,28 +526,20 @@ dependencies = [
 name = "firmware"
 version = "0.1.0"
 dependencies = [
- "as5600",
+ "adc",
  "cortex-m",
  "cortex-m-rt",
  "critical-section",
  "defmt 1.0.1",
  "defmt-rtt",
- "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",
  "embassy-stm32",
- "embassy-sync",
  "embassy-time",
- "embedded-hal 1.0.0",
- "embedded-hal-async",
- "foc",
- "hardware-abstraction",
+ "inverter",
  "panic-probe",
  "portable-atomic",
- "shared",
  "static_cell",
- "stm32-metapac",
- "stm32g4-adc",
 ]
 
 [[package]]
@@ -547,10 +551,6 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "foc"
 version = "0.1.0"
-dependencies = [
- "hardware-abstraction",
- "shared",
-]
 
 [[package]]
 name = "futures-core"
@@ -583,11 +583,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "hardware-abstraction"
+name = "hal"
 version = "0.1.0"
-dependencies = [
- "shared",
-]
 
 [[package]]
 name = "hash32"
@@ -615,6 +612,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "inverter"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "embassy-stm32",
+ "logging",
+ "stm32-metapac",
+]
+
+[[package]]
 name = "litrs"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -625,6 +632,18 @@ name = "log"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
+
+[[package]]
+name = "logging"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "log",
+]
+
+[[package]]
+name = "math"
+version = "0.1.0"
 
 [[package]]
 name = "nb"
@@ -659,6 +678,10 @@ dependencies = [
  "cortex-m",
  "defmt 1.0.1",
 ]
+
+[[package]]
+name = "pid"
+version = "0.1.0"
 
 [[package]]
 name = "pin-project-lite"
@@ -764,14 +787,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
-name = "shared"
-version = "0.1.0"
-dependencies = [
- "defmt 1.0.1",
- "log",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -810,18 +825,6 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "defmt 0.3.100",
-]
-
-[[package]]
-name = "stm32g4-adc"
-version = "0.1.0"
-dependencies = [
- "defmt 1.0.1",
- "embassy-stm32",
- "embassy-sync",
- "embassy-time",
- "shared",
- "stm32-metapac",
 ]
 
 [[package]]

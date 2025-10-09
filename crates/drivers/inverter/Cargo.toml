@@ -1,0 +1,14 @@
+[package]
+name = "inverter"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+log = ["logging/log", ]
+defmt = ["dep:defmt", "embassy-stm32/defmt", "logging/defmt", "stm32-metapac/defmt"]
+
+[dependencies]
+defmt = { version = "1.0.1", optional = true }
+embassy-stm32 = { version = "0.4.0", features = ["stm32g474re"] }
+stm32-metapac = {version = "18.0.0", features = ["stm32g474re"]}
+logging = { path = "../../utils/logging" }

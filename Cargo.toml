@@ -1,5 +1,5 @@
 [workspace]
-members = ["as5600", "firmware", "hardware_abstraction", "foc", "shared", "stm32g4_adc"]
+members = ["crates/drivers/as5600", "crates/drivers/adc", "crates/hal", "crates/math", "crates/utils/logging", "crates/firmware", "crates/drivers/inverter", "crates/controllers/foc", "crates/utils/pid"]
 resolver = "3"
 
 [profile.release]
