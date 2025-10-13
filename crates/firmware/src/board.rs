@@ -14,15 +14,15 @@ bind_interrupts!(struct Irqs{
 });
 
 pub struct Board<'a> {
-    adc3: Adc<'a, ADC3, Taken>,
-    adc4: Adc<'a, ADC4, Taken>,
-    adc5: Adc<'a, ADC5, Taken>,
+    pub adc3: Adc<'a, ADC3, Taken>,
+    pub adc4: Adc<'a, ADC4, Taken>,
+    pub adc5: Adc<'a, ADC5, Taken>,
 
-    adc3_running: adc::injected::Running<ADC3, Continuous, 1>,
-    adc4_running: adc::injected::Running<ADC4, Continuous, 1>,
-    adc5_running: adc::injected::Running<ADC5, Continuous, 1>,
+    pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>,
+    pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>,
+    pub adc5_running: adc::injected::Running<ADC5, Continuous, 1>,
 
-    inverter: Inverter<'a, TIM1>,
+    pub inverter: Inverter<'a, TIM1>,
 }
 
 impl Board<'static> {

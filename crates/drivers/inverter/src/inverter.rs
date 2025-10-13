@@ -7,6 +7,7 @@ use embassy_stm32::timer::{
     AdvancedInstance4Channel, Ch1, Ch2, Ch4, Channel, TimerComplementaryPin, TimerPin,
 };
 use embassy_stm32::{Peri, pac};
+use logging::trace;
 use stm32_metapac::timer::vals::Mms;
 
 const TRGO_OFFSET: u16 = 2;
@@ -48,14 +49,46 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
             CountingMode::CenterAlignedDownInterrupts,
         );
 
-        if pwm.get_max_duty() < TRGO_OFFSET {
-            panic!("Max PWM duty is lower than TRGO offset");
-        }
+        pwm.set_master_output_enable(false);
+        pwm.enable(Channel::Ch1);
+        pwm.enable(Channel::Ch2);
+        pwm.enable(Channel::Ch3);
+        pwm.enable(Channel::Ch4);
+
+        trace!("Max PWM duty: {}", pwm.get_max_duty());
+        assert!(
+            pwm.get_max_duty() > TRGO_OFFSET,
+            "Max PWM duty ({}) is lower than TRGO offset ({})",
+            pwm.get_max_duty(),
+            TRGO_OFFSET,
+        );
 
         pwm.set_duty(Channel::Ch3, pwm.get_max_duty() - TRGO_OFFSET);
         Self::configure_trgo();
 
         Self { pwm }
+    }
+
+    pub fn enable(&mut self) {
+        self.pwm.set_master_output_enable(true);
+    }
+
+    pub fn disable(&mut self) {
+        self.pwm.set_master_output_enable(false);
+    }
+
+    pub fn set_dead_time(&mut self, dead_time: u16) {
+        self.pwm.set_dead_time(dead_time);
+    }
+
+    pub fn set_phase_duties(&mut self, u: u16, v: u16, w: u16) {
+        self.pwm.set_duty(Channel::Ch1, u);
+        self.pwm.set_duty(Channel::Ch2, v);
+        self.pwm.set_duty(Channel::Ch4, w);
+    }
+
+    pub fn get_max_duty(&self) -> u16 {
+        self.pwm.get_max_duty()
     }
 
     fn configure_trgo() {
