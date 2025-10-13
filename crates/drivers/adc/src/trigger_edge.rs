@@ -2,6 +2,7 @@ use stm32_metapac::adc::vals::Exten;
 
 #[allow(dead_code)]
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ExtTriggerEdge {
     Rising,
     Falling,

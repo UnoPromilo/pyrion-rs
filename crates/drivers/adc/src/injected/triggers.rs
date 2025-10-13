@@ -1,6 +1,7 @@
 use crate::trigger_edge::ExtTriggerEdge;
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AnyExtTrigger {
     ADC12(ExtTriggerSourceADC12, ExtTriggerEdge),
     ADC345(ExtTriggerSourceADC345, ExtTriggerEdge),
@@ -10,6 +11,7 @@ pub enum AnyExtTrigger {
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ExtTriggerSourceADC12 {
     T1_TRGO = 0,
     T1_CC4 = 1,
@@ -45,6 +47,7 @@ pub enum ExtTriggerSourceADC12 {
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ExtTriggerSourceADC345 {
     T1_TRGO = 0,
     T1_CC4 = 1,

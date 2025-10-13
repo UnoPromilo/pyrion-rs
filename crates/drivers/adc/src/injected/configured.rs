@@ -43,7 +43,11 @@ impl<I: AdcInstance> Configured<I, Single> {
 impl<I: AdcInstance> Configured<I, Continuous> {
     #[allow(dead_code)]
     pub(crate) fn new_triggered(trigger: AnyExtTrigger) -> Self {
-        trace!("Configuring injected ADC triggered on {}", trigger);
+        trace!(
+            "Configuring injected {} triggered on {}",
+            I::get_name(),
+            trigger
+        );
         I::set_ext_trigger(trigger);
         I::set_discontinuous_mode(false);
         I::set_auto_conversion_mode(false);
@@ -56,7 +60,7 @@ impl<I: AdcInstance> Configured<I, Continuous> {
 
     #[allow(dead_code)]
     pub(crate) fn new_auto() -> Self {
-        trace!("Configuring injected ADC auto");
+        trace!("Configuring injected {} auto", I::get_name(),);
         I::set_software_trigger();
         I::set_discontinuous_mode(false);
         I::set_auto_conversion_mode(true);

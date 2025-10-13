@@ -4,6 +4,7 @@ use crate::prescaler::Prescaler;
 use crate::state::WithState;
 use crate::trigger_edge::ExtTriggerEdge;
 use crate::{Config, injected};
+use core::any::type_name;
 use core::marker::PhantomData;
 use embassy_stm32::adc::{
     Temperature, TemperatureChannel, VBatChannel, Vbat, VrefChannel, VrefInt,
@@ -30,11 +31,15 @@ impl AdcFamily for Family345 {
 
 pub trait AdcInstance: PacInstance + WithState {
     type Family: AdcFamily;
+    fn get_name() -> &'static str;
 }
 macro_rules! adc_instance {
     ($($adc:ident => $family:ty),+) => {
         $(impl AdcInstance for peripherals::$adc {
             type Family = $family;
+            fn get_name() -> &'static str {
+                stringify!($adc)
+            }
         })+
     }
 }
@@ -65,13 +70,13 @@ where
     T: AdcInstance,
 {
     pub fn new(adc: Peri<'d, T>, config: Config) -> Self {
-        trace!("Configuring ADC");
+        trace!("Configuring {}", T::get_name());
         rcc::enable_and_reset::<T>();
         let freq = rcc::frequency::<T>();
         let presc = Presc::from_kernel_clock(freq);
         T::common_regs().ccr().modify(|w| w.set_presc(presc));
         let freq = Hertz::hz(freq.0 / presc.divisor());
-        trace!("ADC frequency set to {}", freq);
+        trace!("{} frequency set to {}", T::get_name(), freq);
 
         T::power_up();
         T::set_difsel_all(Difsel::SINGLE_ENDED);

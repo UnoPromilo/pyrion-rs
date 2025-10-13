@@ -26,5 +26,5 @@ panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 static_cell = "2.1.1"
 portable-atomic = { version = "1.11.1", features = ["critical-section"] }
 
-adc = {path = "../drivers/adc"}
-inverter = {path = "../drivers/inverter"}
+adc = {path = "../drivers/adc", features = ["defmt"]}
+inverter = {path = "../drivers/inverter", features = ["defmt"]}

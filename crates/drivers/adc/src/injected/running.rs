@@ -37,10 +37,10 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
     ) -> Self {
         let instance = Self::inner_new(configured, sequence);
         if I::regs().cfgr().read().jauto() == false {
-            trace!("Injected ADC started");
+            trace!("Injected {} started", I::get_name(),);
             I::start();
         } else {
-            trace!("Injected ADC started in auto mode");
+            trace!("Injected {} started in auto mode", I::get_name(),);
         }
         instance
     }
