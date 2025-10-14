@@ -1,12 +1,11 @@
 [package]
-name = "foc"
+name = "controller-shared"
 version = "0.1.0"
 edition = "2024"
 
-
 [features]
-defmt = ["dep:defmt"]
+defmt = ["dep:defmt", "foc/defmt"]
 
 [dependencies]
 defmt = {version = "1.0.1", optional = true}
-units = {path = "../../utils/units"}
+foc = {path = "../foc"}

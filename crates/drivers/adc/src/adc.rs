@@ -4,7 +4,6 @@ use crate::prescaler::Prescaler;
 use crate::state::WithState;
 use crate::trigger_edge::ExtTriggerEdge;
 use crate::{Config, injected};
-use core::any::type_name;
 use core::marker::PhantomData;
 use embassy_stm32::adc::{
     Temperature, TemperatureChannel, VBatChannel, Vbat, VrefChannel, VrefInt,

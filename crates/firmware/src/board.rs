@@ -14,13 +14,13 @@ bind_interrupts!(struct Irqs{
 });
 
 pub struct Board<'a> {
-    pub adc3: Adc<'a, ADC3, Taken>,
-    pub adc4: Adc<'a, ADC4, Taken>,
-    pub adc5: Adc<'a, ADC5, Taken>,
+    pub _adc3: Adc<'a, ADC3, Taken>,
+    pub _adc4: Adc<'a, ADC4, Taken>,
+    pub _adc5: Adc<'a, ADC5, Taken>,
 
     pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>,
     pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>,
-    pub adc5_running: adc::injected::Running<ADC5, Continuous, 1>,
+    pub adc5_running: adc::injected::Running<ADC5, Continuous, 2>,
 
     pub inverter: Inverter<'a, TIM1>,
 }
@@ -32,17 +32,20 @@ impl Board<'static> {
         let adc3 = Adc::new(peripherals.ADC3, adc_config);
         let adc4 = Adc::new(peripherals.ADC4, adc_config);
         let adc5 = Adc::new(peripherals.ADC5, adc_config);
+
+        let v_ref_int = adc5.enable_vrefint();
+
         let (adc3, adc3_configured) = adc3.configure_injected_ext_trigger(
-            ExtTriggerSourceADC345::T3_TRGO,
+            ExtTriggerSourceADC345::T1_TRGO,
             ExtTriggerEdge::Rising,
         );
         let (adc4, adc4_configured) = adc4.configure_injected_ext_trigger(
-            ExtTriggerSourceADC345::T3_TRGO,
+            ExtTriggerSourceADC345::T1_TRGO,
             ExtTriggerEdge::Rising,
         );
 
         let (adc5, adc5_configured) = adc5.configure_injected_ext_trigger(
-            ExtTriggerSourceADC345::T3_TRGO,
+            ExtTriggerSourceADC345::T1_TRGO,
             ExtTriggerEdge::Rising,
         );
         let adc3_running = adc3_configured.start(
@@ -54,7 +57,10 @@ impl Board<'static> {
             Irqs,
         );
         let adc5_running = adc5_configured.start(
-            [(peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5)],
+            [
+                (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5),
+                (v_ref_int.degrade_adc(), SampleTime::CYCLES6_5),
+            ],
             Irqs,
         );
 
@@ -70,9 +76,9 @@ impl Board<'static> {
         );
 
         Self {
-            adc3,
-            adc4,
-            adc5,
+            _adc3: adc3,
+            _adc4: adc4,
+            _adc5: adc5,
             adc3_running,
             adc4_running,
             adc5_running,

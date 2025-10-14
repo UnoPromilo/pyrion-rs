@@ -76,9 +76,7 @@ where
     }
 
     async fn write_u8(&mut self, address: Register, value: u8) -> Result<()> {
-        self.i2c
-            .write(ADDRESS, &[address.into(), value.into()])
-            .await?;
+        self.i2c.write(ADDRESS, &[address.into(), value]).await?;
         Ok(())
     }
 }

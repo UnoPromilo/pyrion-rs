@@ -1,18 +1,21 @@
 #![no_std]
 #![no_main]
+#![allow(clippy::bool_comparison)]
 
-use core::arch::asm;
 use embassy_executor::Spawner;
+use embassy_futures::yield_now;
 
+mod app;
 mod board;
 
 #[allow(unused_imports)]
 use {defmt_rtt as _, panic_probe as _};
 
 #[embassy_executor::main]
-async fn main(_spawner: Spawner) {
-    let mut board = board::Board::init();
+async fn main(spawner: Spawner) {
+    let board = board::Board::init();
+    spawner.must_spawn(app::task(board));
     loop {
-        unsafe { asm!("nop") };
+        yield_now().await;
     }
 }
