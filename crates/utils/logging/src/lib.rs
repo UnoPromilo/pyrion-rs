@@ -1,5 +1,8 @@
 #![no_std]
 #![macro_use]
+
+use embassy_time::{Duration, Instant};
+
 #[cfg(all(feature = "defmt", feature = "log"))]
 compile_error!("You may not enable both `defmt` and `log` features.");
 
@@ -156,4 +159,43 @@ macro_rules! error {
     ($s:literal $(, $x:expr)* $(,)?) => {{
         let _ = ($(& $x),*);
     }};
+}
+
+pub struct FreqMeter {
+    last: Instant,
+    count: u64,
+    interval: Duration,
+    name: &'static str,
+}
+
+impl FreqMeter {
+    pub fn named(name: &'static str) -> Self {
+        Self::new(Duration::from_secs(10), name)
+    }
+
+    fn new(interval: Duration, name: &'static str) -> Self {
+        Self {
+            last: Instant::now(),
+            count: 0,
+            interval,
+            name,
+        }
+    }
+    #[cfg(feature = "freq-meter")]
+    pub fn tick(&mut self) {
+        self.count += 1;
+        if self.last.elapsed() > self.interval {
+            debug!(
+                "{} frequency: {} Hz",
+                self.name,
+                self.count / self.interval.as_secs()
+            );
+            self.count = 0;
+            self.last = Instant::now();
+        }
+    }
+
+    #[cfg(not(feature = "freq-meter"))]
+    #[inline(always)]
+    pub fn tick(&mut self) {}
 }

@@ -7,7 +7,7 @@ use embassy_stm32::timer::{
     AdvancedInstance4Channel, Ch1, Ch2, Ch4, Channel, TimerComplementaryPin, TimerPin,
 };
 use embassy_stm32::{Peri, pac};
-use logging::trace;
+use logging::debug;
 use stm32_metapac::timer::vals::Mms;
 
 const TRGO_OFFSET: u16 = 2;
@@ -55,7 +55,7 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
         pwm.enable(Channel::Ch3);
         pwm.enable(Channel::Ch4);
 
-        trace!("Max PWM duty: {}", pwm.get_max_duty());
+        debug!("Max PWM duty: {}", pwm.get_max_duty());
         assert!(
             pwm.get_max_duty() > TRGO_OFFSET,
             "Max PWM duty ({}) is lower than TRGO offset ({})",

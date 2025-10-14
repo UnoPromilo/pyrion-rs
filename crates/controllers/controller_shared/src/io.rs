@@ -5,6 +5,8 @@ pub struct RawSnapshot {
     pub v_ref: u16,
 
     pub max_duty: u16,
+
+    pub angle: u16,
 }
 
 pub struct RawInverterValues {

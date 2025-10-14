@@ -1,3 +1,4 @@
+use defmt::debug;
 use crate::injected::Configured;
 use crate::injected::pac::{ModifyPac, ReadPac};
 use crate::{AdcInstance, Continuous, EndOfConversionSignal, Single};
@@ -37,10 +38,10 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
     ) -> Self {
         let instance = Self::inner_new(configured, sequence);
         if I::regs().cfgr().read().jauto() == false {
-            trace!("Injected {} started", I::get_name(),);
+            debug!("Injected {} started", I::get_name(),);
             I::start();
         } else {
-            trace!("Injected {} started in auto mode", I::get_name(),);
+            debug!("Injected {} started in auto mode", I::get_name(),);
         }
         instance
     }

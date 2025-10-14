@@ -1,19 +1,32 @@
 use adc::injected::ExtTriggerSourceADC345;
 use adc::trigger_edge::ExtTriggerEdge;
-use adc::{Adc, Continuous, InterruptHandler, Taken};
+use adc::{Adc, Continuous, Taken};
+use as5600::AS5600;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
-use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, TIM1};
+use embassy_stm32::gpio::Speed;
+use embassy_stm32::i2c::{I2c, Master};
+use embassy_stm32::mode::Async;
+use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, I2C1, TIM1};
 use embassy_stm32::time::khz;
-use embassy_stm32::{Peripherals, bind_interrupts};
+use embassy_stm32::{Peripherals, bind_interrupts, i2c};
 use inverter::Inverter;
 
 bind_interrupts!(struct Irqs{
-    ADC3 => InterruptHandler<ADC3>;
-    ADC4 => InterruptHandler<ADC4>;
-    ADC5 => InterruptHandler<ADC5>;
+    ADC3 => adc::InterruptHandler<ADC3>;
+    ADC4 => adc::InterruptHandler<ADC4>;
+    ADC5 => adc::InterruptHandler<ADC5>;
+
+    I2C1_EV => i2c::EventInterruptHandler<I2C1>;
+    I2C1_ER => i2c::ErrorInterruptHandler<I2C1>;
 });
 
 pub struct Board<'a> {
+    pub adc: BoardAdc<'a>,
+    pub inverter: BoardInverter<'a>,
+    pub encoder: BoardEncoder<'a>,
+}
+
+pub struct BoardAdc<'a> {
     pub _adc3: Adc<'a, ADC3, Taken>,
     pub _adc4: Adc<'a, ADC4, Taken>,
     pub _adc5: Adc<'a, ADC5, Taken>,
@@ -21,48 +34,77 @@ pub struct Board<'a> {
     pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>,
     pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>,
     pub adc5_running: adc::injected::Running<ADC5, Continuous, 2>,
-
-    pub inverter: Inverter<'a, TIM1>,
 }
 
+pub type BoardInverter<'a> = Inverter<'a, TIM1>;
+pub type BoardEncoder<'a> = AS5600<I2c<'a, Async, Master>>;
+
 impl Board<'static> {
-    pub fn init() -> Self {
+    pub async fn init() -> Result<Self, Error> {
         let peripherals = Self::configure_mcu();
-        let adc_config = adc::Config::default();
-        let adc3 = Adc::new(peripherals.ADC3, adc_config);
-        let adc4 = Adc::new(peripherals.ADC4, adc_config);
-        let adc5 = Adc::new(peripherals.ADC5, adc_config);
 
-        let v_ref_int = adc5.enable_vrefint();
+        let as5600 = {
+            let mut i2c_config = i2c::Config::default();
+            i2c_config.gpio_speed = Speed::VeryHigh;
+            i2c_config.frequency = khz(100);
+            let i2c = I2c::new(
+                peripherals.I2C1,
+                peripherals.PB8,
+                peripherals.PB9,
+                Irqs,
+                peripherals.DMA1_CH6,
+                peripherals.DMA1_CH1,
+                i2c_config,
+            );
 
-        let (adc3, adc3_configured) = adc3.configure_injected_ext_trigger(
-            ExtTriggerSourceADC345::T1_TRGO,
-            ExtTriggerEdge::Rising,
-        );
-        let (adc4, adc4_configured) = adc4.configure_injected_ext_trigger(
-            ExtTriggerSourceADC345::T1_TRGO,
-            ExtTriggerEdge::Rising,
-        );
+            AS5600::new(i2c, as5600::Config::default()).await?
+        };
 
-        let (adc5, adc5_configured) = adc5.configure_injected_ext_trigger(
-            ExtTriggerSourceADC345::T1_TRGO,
-            ExtTriggerEdge::Rising,
-        );
-        let adc3_running = adc3_configured.start(
-            [(peripherals.PB13.degrade_adc(), SampleTime::CYCLES6_5)],
-            Irqs,
-        );
-        let adc4_running = adc4_configured.start(
-            [(peripherals.PB15.degrade_adc(), SampleTime::CYCLES6_5)],
-            Irqs,
-        );
-        let adc5_running = adc5_configured.start(
-            [
-                (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5),
-                (v_ref_int.degrade_adc(), SampleTime::CYCLES6_5),
-            ],
-            Irqs,
-        );
+        let adc = {
+            let adc_config = adc::Config::default();
+            let adc3 = Adc::new(peripherals.ADC3, adc_config);
+            let adc4 = Adc::new(peripherals.ADC4, adc_config);
+            let adc5 = Adc::new(peripherals.ADC5, adc_config);
+
+            let v_ref_int = adc5.enable_vrefint();
+
+            let (adc3, adc3_configured) = adc3.configure_injected_ext_trigger(
+                ExtTriggerSourceADC345::T1_TRGO,
+                ExtTriggerEdge::Rising,
+            );
+            let (adc4, adc4_configured) = adc4.configure_injected_ext_trigger(
+                ExtTriggerSourceADC345::T1_TRGO,
+                ExtTriggerEdge::Rising,
+            );
+
+            let (adc5, adc5_configured) = adc5.configure_injected_ext_trigger(
+                ExtTriggerSourceADC345::T1_TRGO,
+                ExtTriggerEdge::Rising,
+            );
+            let adc3_running = adc3_configured.start(
+                [(peripherals.PB13.degrade_adc(), SampleTime::CYCLES6_5)],
+                Irqs,
+            );
+            let adc4_running = adc4_configured.start(
+                [(peripherals.PB15.degrade_adc(), SampleTime::CYCLES6_5)],
+                Irqs,
+            );
+            let adc5_running = adc5_configured.start(
+                [
+                    (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5),
+                    (v_ref_int.degrade_adc(), SampleTime::CYCLES6_5),
+                ],
+                Irqs,
+            );
+            BoardAdc {
+                _adc3: adc3,
+                _adc4: adc4,
+                _adc5: adc5,
+                adc3_running,
+                adc4_running,
+                adc5_running,
+            }
+        };
 
         let inverter = Inverter::new(
             peripherals.TIM1,
@@ -75,15 +117,11 @@ impl Board<'static> {
             khz(30),
         );
 
-        Self {
-            _adc3: adc3,
-            _adc4: adc4,
-            _adc5: adc5,
-            adc3_running,
-            adc4_running,
-            adc5_running,
+        Ok(Self {
+            adc,
             inverter,
-        }
+            encoder: as5600,
+        })
     }
 
     fn configure_mcu() -> Peripherals {
@@ -105,5 +143,26 @@ impl Board<'static> {
             config
         };
         embassy_stm32::init(config)
+    }
+
+    pub fn split(
+        self,
+    ) -> (
+        BoardAdc<'static>,
+        BoardInverter<'static>,
+        BoardEncoder<'static>,
+    ) {
+        (self.adc, self.inverter, self.encoder)
+    }
+}
+
+#[derive(Debug, defmt::Format)]
+pub enum Error {
+    AS6500(as5600::Error),
+}
+
+impl From<as5600::Error> for Error {
+    fn from(e: as5600::Error) -> Self {
+        Self::AS6500(e)
     }
 }

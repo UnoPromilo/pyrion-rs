@@ -7,7 +7,7 @@ use crate::{
 use core::marker::PhantomData;
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Binding;
-use logging::trace;
+use logging::debug;
 use stm32_metapac::adc::vals::SampleTime;
 
 define_channels_mod!(channels, [1, 2, 3, 4]);
@@ -43,7 +43,7 @@ impl<I: AdcInstance> Configured<I, Single> {
 impl<I: AdcInstance> Configured<I, Continuous> {
     #[allow(dead_code)]
     pub(crate) fn new_triggered(trigger: AnyExtTrigger) -> Self {
-        trace!(
+        debug!(
             "Configuring injected {} triggered on {}",
             I::get_name(),
             trigger
@@ -60,7 +60,7 @@ impl<I: AdcInstance> Configured<I, Continuous> {
 
     #[allow(dead_code)]
     pub(crate) fn new_auto() -> Self {
-        trace!("Configuring injected {} auto", I::get_name(),);
+        debug!("Configuring injected {} auto", I::get_name(),);
         I::set_software_trigger();
         I::set_discontinuous_mode(false);
         I::set_auto_conversion_mode(true);

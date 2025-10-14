@@ -2,10 +2,11 @@ use crate::config::Config;
 use crate::error::Error;
 use crate::registers::*;
 use embedded_hal_async::i2c;
-use logging::trace;
+use logging::debug;
 
 pub struct AS5600<I2C> {
     i2c: I2C,
+    config: Config,
 }
 
 type Result<T, E = Error> = core::result::Result<T, E>;
@@ -15,26 +16,26 @@ where
     I2C: i2c::I2c,
 {
     pub async fn new(i2c: I2C, config: Config) -> Result<Self> {
-        trace!("Initializing AS5600");
-        let mut as5600 = Self { i2c };
-        as5600.write_config(config).await?;
+        debug!("Initializing AS5600");
+        let mut as5600 = Self { i2c, config };
+        as5600.write_config().await?;
         Ok(as5600)
     }
 
-    async fn write_config(&mut self, config: Config) -> Result<()> {
-        self.write_u8(Register::ConfHigh, config.get_high_config_byte())
+    pub async fn write_config(&mut self) -> Result<()> {
+        self.write_u8(Register::ConfHigh, self.config.get_high_config_byte())
             .await?;
-        self.write_u8(Register::ConfLow, config.get_low_config_byte())
-            .await?;
-
-        self.write_u8(Register::ZPosHigh, config.get_high_z_pos())
-            .await?;
-        self.write_u8(Register::ZPosLow, config.get_low_z_pos())
+        self.write_u8(Register::ConfLow, self.config.get_low_config_byte())
             .await?;
 
-        self.write_u8(Register::MPosHigh, config.get_high_m_pos())
+        self.write_u8(Register::ZPosHigh, self.config.get_high_z_pos())
             .await?;
-        self.write_u8(Register::MPosLow, config.get_low_m_pos())
+        self.write_u8(Register::ZPosLow, self.config.get_low_z_pos())
+            .await?;
+
+        self.write_u8(Register::MPosHigh, self.config.get_high_m_pos())
+            .await?;
+        self.write_u8(Register::MPosLow, self.config.get_low_m_pos())
             .await?;
 
         Ok(())

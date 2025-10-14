@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-defmt = ["dep:defmt"]
+defmt = ["dep:defmt", "embassy-time/defmt"]
+log = ["dep:log", "embassy-time/log"]
+freq-meter =[]
 
 [dependencies]
 defmt = { version = "1.0.1", optional = true }
+embassy-time = {version = "0.5.0"}
 log = { version = "0.4.14", optional = true }

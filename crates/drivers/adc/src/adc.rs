@@ -10,7 +10,7 @@ use embassy_stm32::adc::{
 };
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{Peri, peripherals, rcc};
-use logging::trace;
+use logging::debug;
 use stm32_metapac::adc::vals::{Adcaldif, Difsel};
 use stm32_metapac::adccommon::vals::Presc;
 // TODO add analog watchdog
@@ -69,13 +69,13 @@ where
     T: AdcInstance,
 {
     pub fn new(adc: Peri<'d, T>, config: Config) -> Self {
-        trace!("Configuring {}", T::get_name());
+        debug!("Configuring {}", T::get_name());
         rcc::enable_and_reset::<T>();
         let freq = rcc::frequency::<T>();
         let presc = Presc::from_kernel_clock(freq);
         T::common_regs().ccr().modify(|w| w.set_presc(presc));
         let freq = Hertz::hz(freq.0 / presc.divisor());
-        trace!("{} frequency set to {}", T::get_name(), freq);
+        debug!("{} frequency set to {}", T::get_name(), freq);
 
         T::power_up();
         T::set_difsel_all(Difsel::SINGLE_ENDED);

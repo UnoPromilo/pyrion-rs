@@ -31,5 +31,5 @@ adc = { path = "../drivers/adc", features = ["defmt"] }
 as5600 = { path = "../drivers/as5600", features = ["defmt"] }
 controller-shared = { path = "../controllers/controller_shared", features = ["defmt"] }
 inverter = { path = "../drivers/inverter", features = ["defmt"] }
-logging = { path = "../utils/logging" }
+logging = { path = "../utils/logging", features = ["freq-meter"] }
 units = { path = "../utils/units" }

@@ -4,6 +4,8 @@
 
 use embassy_executor::Spawner;
 use embassy_futures::yield_now;
+use portable_atomic::AtomicU16;
+use static_cell::StaticCell;
 
 mod app;
 mod board;
@@ -13,8 +15,20 @@ use {defmt_rtt as _, panic_probe as _};
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let board = board::Board::init();
-    spawner.must_spawn(app::task(board));
+    let board = {
+        let result = board::Board::init().await;
+        match result {
+            Ok(board) => board,
+            Err(e) => {
+                panic!("Failed to initialize board: {:?}", e);
+            }
+        }
+    };
+    static RAW_ANGLE: StaticCell<AtomicU16> = StaticCell::new();
+    let raw_angle = RAW_ANGLE.init(AtomicU16::new(0));
+    let (board_adc, board_inverter, board_encoder) = board.split();
+    spawner.must_spawn(app::task_encoder(board_encoder, raw_angle));
+    spawner.must_spawn(app::task_adc(board_adc, board_inverter, raw_angle));
     loop {
         yield_now().await;
     }
