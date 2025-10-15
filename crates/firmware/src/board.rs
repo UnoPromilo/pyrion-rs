@@ -32,7 +32,7 @@ pub struct BoardAdc<'a> {
     pub _adc5: Adc<'a, ADC5, Taken>,
 
     pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>,
-    pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>,
+    pub adc4_running: adc::injected::Running<ADC4, Continuous, 2>,
     pub adc5_running: adc::injected::Running<ADC5, Continuous, 2>,
 }
 
@@ -86,7 +86,10 @@ impl Board<'static> {
                 Irqs,
             );
             let adc4_running = adc4_configured.start(
-                [(peripherals.PB15.degrade_adc(), SampleTime::CYCLES6_5)],
+                [
+                    (peripherals.PB15.degrade_adc(), SampleTime::CYCLES6_5),
+                    (peripherals.PB14.degrade_adc(), SampleTime::CYCLES6_5),
+                ],
                 Irqs,
             );
             let adc5_running = adc5_configured.start(

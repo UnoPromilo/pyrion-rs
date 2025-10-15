@@ -1,8 +1,9 @@
 use crate::board::{BoardAdc, BoardEncoder, BoardInverter};
 use controller_shared::{RawSnapshot, control_step};
 use core::sync::atomic::Ordering;
+use defmt::info;
 use embassy_futures::join::join3;
-use embassy_time::{Duration, Timer, with_timeout};
+use embassy_time::{Duration, Instant, Timer, with_timeout};
 use logging::FreqMeter;
 use logging::error;
 use portable_atomic::AtomicU16;
@@ -19,6 +20,7 @@ pub async fn task_adc(
     let mut inverter_enabled = false;
     let max_duty = inverter.get_max_duty();
     let mut freq_meter = FreqMeter::named("ADC");
+    let mut last_print = Instant::now();
 
     loop {
         let result = with_timeout(
@@ -32,12 +34,20 @@ pub async fn task_adc(
                 i_u: values.0[0],
                 i_v: values.1[0],
                 i_w: values.2[0],
+                v_bus: values.2[1],
                 v_ref: values.2[1],
                 max_duty,
                 angle: raw_angle.load(Ordering::Relaxed),
             }),
             Err(_) => None,
         };
+
+        if last_print.elapsed().as_millis() > 1000
+            && let Some(snapshot) = &raw_reading
+        {
+            info!("{:?}", snapshot);
+            last_print = Instant::now();
+        }
 
         let pwm = control_step(&raw_reading);
 
