@@ -4,11 +4,17 @@ use crc_engine::CrcEngine;
 const MAX_PACKET_SIZE: usize = (u8::MAX as usize) + 4;
 
 const START_BYTE: u8 = 0xAA;
-// Struct of message = [START(u8)][LENGTH(u8)][CMD_ID(u8)][PAYLOAD][CRC]
+// Struct of message = [START(u8)][LENGTH(u8)][CMD_ID(u8)][PAYLOAD][CRC(u16)]
 
 pub struct Parser {
     position: usize,
     buffer: [u8; MAX_PACKET_SIZE],
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Parser {

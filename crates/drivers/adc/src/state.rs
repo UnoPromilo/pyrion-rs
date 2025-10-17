@@ -29,6 +29,12 @@ pub struct State {
     pub jeos_signal: Signal<CriticalSectionRawMutex, [u16; 4]>,
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl State {
     pub const fn new() -> Self {
         Self {

@@ -60,10 +60,10 @@ impl<T: PacInstance> RegManipulations for T {
     fn enable() {
         while Self::regs().cr().read().addis() {}
 
-        if Self::regs().cr().read().aden() == false {
+        if !Self::regs().cr().read().aden() {
             Self::regs().isr().modify(|reg| reg.set_adrdy(true));
             Self::regs().cr().modify(|reg| reg.set_aden(true));
-            while Self::regs().isr().read().adrdy() == false {}
+            while !Self::regs().isr().read().adrdy() {}
         }
     }
 

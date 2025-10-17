@@ -1,7 +1,7 @@
-use defmt::debug;
 use crate::injected::Configured;
 use crate::injected::pac::{ModifyPac, ReadPac};
 use crate::{AdcInstance, Continuous, EndOfConversionSignal, Single};
+use defmt::debug;
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Interrupt;
 use logging::trace;
@@ -37,7 +37,7 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
         sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
     ) -> Self {
         let instance = Self::inner_new(configured, sequence);
-        if I::regs().cfgr().read().jauto() == false {
+        if !I::regs().cfgr().read().jauto() {
             debug!("Injected {} started", I::get_name(),);
             I::start();
         } else {
@@ -49,8 +49,8 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
     /// Reads the value of the latest conversion
     pub fn read_now(&self) -> [u16; CHANNELS] {
         let mut values = [0; CHANNELS];
-        for i in 0..CHANNELS {
-            values[i] = I::read_value(i);
+        for (i, item) in values.iter_mut().enumerate() {
+            *item = I::read_value(i);
         }
         values
     }
@@ -58,9 +58,7 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
     pub async fn read_next(&self) -> [u16; CHANNELS] {
         let result = I::state().jeos_signal.wait().await;
         let mut values = [0; CHANNELS];
-        for i in 0..CHANNELS {
-            values[i] = result[i]
-        }
+        values.copy_from_slice(&result[..CHANNELS]);
         values
     }
 }
