@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-defmt = ["dep:defmt", "foc/defmt", "embassy-time/defmt"]
+defmt = ["dep:defmt", "foc/defmt", "embassy-time/defmt", "embassy-sync/defmt"]
 
 [dependencies]
-defmt = {version = "1.0.1", optional = true}
-embassy-time = {version = "0.5.0"}
-foc = {path = "../foc"}
+defmt = { version = "1.0.1", optional = true }
+embassy-time = { version = "0.5.0" }
+embassy-sync = { version = "0.7.2" }
+foc = { path = "../foc" }
 units = { path = "../../utils/units" }
+transport = { path = "../../transport" }

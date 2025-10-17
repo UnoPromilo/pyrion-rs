@@ -1,7 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-    <configuration default="false" name="Debugger" type="RsRemoteRunConfiguration" debuggerKind="USER_GDB"
-                   userDebuggerPath="/opt/homebrew/bin/arm-none-eabi-gdb" remoteCommand="localhost:3333"
-                   symbolFile="$PROJECT_DIR$/target/thumbv6m-none-eabi/debug/firmware" sysroot="">
-        <method v="2"/>
-    </configuration>
-</component>

@@ -2,12 +2,15 @@ use adc::injected::ExtTriggerSourceADC345;
 use adc::trigger_edge::ExtTriggerEdge;
 use adc::{Adc, Continuous, Taken};
 use as5600::AS5600;
+use crc_engine::hardware::HardwareCrcEngine;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::gpio::Speed;
 use embassy_stm32::i2c::{I2c, Master};
 use embassy_stm32::mode::Async;
-use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, I2C1, TIM1};
+use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, I2C1, LPUART1, TIM1};
 use embassy_stm32::time::khz;
+use embassy_stm32::usart;
+use embassy_stm32::usart::Uart;
 use embassy_stm32::{Peripherals, bind_interrupts, i2c};
 use inverter::Inverter;
 
@@ -18,12 +21,16 @@ bind_interrupts!(struct Irqs{
 
     I2C1_EV => i2c::EventInterruptHandler<I2C1>;
     I2C1_ER => i2c::ErrorInterruptHandler<I2C1>;
+
+    LPUART1 => usart::InterruptHandler<LPUART1>;
 });
 
 pub struct Board<'a> {
     pub adc: BoardAdc<'a>,
     pub inverter: BoardInverter<'a>,
     pub encoder: BoardEncoder<'a>,
+    pub uart: BoardUart<'a>,
+    pub crc: BoardCrc<'a>,
 }
 
 pub struct BoardAdc<'a> {
@@ -38,11 +45,13 @@ pub struct BoardAdc<'a> {
 
 pub type BoardInverter<'a> = Inverter<'a, TIM1>;
 pub type BoardEncoder<'a> = AS5600<I2c<'a, Async, Master>>;
+pub type BoardUart<'a> = Uart<'a, Async>;
+pub type BoardCrc<'a> = HardwareCrcEngine<'a>;
 
 impl Board<'static> {
     pub async fn init() -> Result<Self, Error> {
         let peripherals = Self::configure_mcu();
-
+        let crc = HardwareCrcEngine::new(peripherals.CRC);
         let as5600 = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
@@ -52,8 +61,8 @@ impl Board<'static> {
                 peripherals.PB8,
                 peripherals.PB9,
                 Irqs,
-                peripherals.DMA1_CH6,
-                peripherals.DMA1_CH1,
+                peripherals.DMA1_CH2,
+                peripherals.DMA1_CH3,
                 i2c_config,
             );
 
@@ -109,6 +118,23 @@ impl Board<'static> {
             }
         };
 
+        let uart = {
+            let config = usart::Config::default();
+            let uart = Uart::new(
+                peripherals.LPUART1,
+                peripherals.PA3,
+                peripherals.PA2,
+                Irqs,
+                peripherals.DMA1_CH6,
+                peripherals.DMA1_CH7,
+                config,
+            );
+            match uart {
+                Ok(uart) => uart,
+                Err(e) => panic!("uart initialization error: {:?}", e),
+            }
+        };
+
         let inverter = Inverter::new(
             peripherals.TIM1,
             peripherals.PC0,
@@ -124,6 +150,8 @@ impl Board<'static> {
             adc,
             inverter,
             encoder: as5600,
+            uart,
+            crc,
         })
     }
 
@@ -154,8 +182,10 @@ impl Board<'static> {
         BoardAdc<'static>,
         BoardInverter<'static>,
         BoardEncoder<'static>,
+        BoardUart<'static>,
+        BoardCrc<'static>,
     ) {
-        (self.adc, self.inverter, self.encoder)
+        (self.adc, self.inverter, self.encoder, self.uart, self.crc)
     }
 }
 

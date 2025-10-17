@@ -1,0 +1,13 @@
+[package]
+name = "crc-engine"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+defmt = ["embassy-stm32/defmt"]
+software = ["dep:crc"]
+hardware = ["dep:embassy-stm32"]
+
+[dependencies]
+embassy-stm32 = { version = "0.4.0", features = ["stm32g474re"], optional = true }
+crc = { version = "3.3.0", optional = true }

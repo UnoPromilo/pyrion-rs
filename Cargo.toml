@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/drivers/as5600", "crates/drivers/adc", "crates/hal", "crates/math", "crates/utils/logging", "crates/firmware", "crates/drivers/inverter", "crates/controllers/foc", "crates/utils/pid", "crates/utils/units", "crates/controllers/controller_shared"]
+members = ["crates/drivers/as5600", "crates/drivers/adc", "crates/hal", "crates/math", "crates/utils/logging", "crates/firmware", "crates/drivers/inverter", "crates/controllers/foc", "crates/utils/pid", "crates/utils/units", "crates/controllers/controller_shared", "crates/utils/crc_engine", "crates/transport"]
 resolver = "3"
 
 [profile.release]
@@ -7,7 +7,3 @@ debug = 2
 lto = true
 opt-level = 'z'
 
-[profile.dev]
-debug = 2
-lto = true
-opt-level = "z"

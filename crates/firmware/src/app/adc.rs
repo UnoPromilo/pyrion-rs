@@ -1,11 +1,9 @@
-use crate::board::{BoardAdc, BoardEncoder, BoardInverter};
+use crate::board::{BoardAdc, BoardInverter};
 use controller_shared::{RawSnapshot, control_step};
 use core::sync::atomic::Ordering;
-use defmt::info;
 use embassy_futures::join::join3;
-use embassy_time::{Duration, Instant, Timer, with_timeout};
-use logging::FreqMeter;
-use logging::error;
+use embassy_time::{Duration, Instant, with_timeout};
+use logging::{FreqMeter, info};
 use portable_atomic::AtomicU16;
 
 #[embassy_executor::task]
@@ -64,23 +62,6 @@ pub async fn task_adc(
                     inverter_enabled = false;
                     inverter.disable();
                 }
-            }
-        }
-        freq_meter.tick();
-    }
-}
-
-#[embassy_executor::task]
-pub async fn task_encoder(mut encoder: BoardEncoder<'static>, raw_angle: &'static AtomicU16) {
-    let mut freq_meter = FreqMeter::named("ENC");
-    loop {
-        let result = encoder.read_angle().await;
-        match result {
-            Ok(angle) => raw_angle.store(angle, Ordering::Relaxed),
-            Err(error) => {
-                error!("Failed to read an angle: {}", error);
-                Timer::after(Duration::from_millis(100)).await;
-                let _ = encoder.write_config().await;
             }
         }
         freq_meter.tick();

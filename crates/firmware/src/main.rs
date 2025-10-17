@@ -26,9 +26,10 @@ async fn main(spawner: Spawner) {
     };
     static RAW_ANGLE: StaticCell<AtomicU16> = StaticCell::new();
     let raw_angle = RAW_ANGLE.init(AtomicU16::new(0));
-    let (board_adc, board_inverter, board_encoder) = board.split();
+    let (board_adc, board_inverter, board_encoder, board_uart, board_crc) = board.split();
     spawner.must_spawn(app::task_encoder(board_encoder, raw_angle));
     spawner.must_spawn(app::task_adc(board_adc, board_inverter, raw_angle));
+    spawner.must_spawn(app::task_uart(board_uart, board_crc));
     loop {
         yield_now().await;
     }
