@@ -5,6 +5,7 @@ pub struct RawSnapshot {
     pub i_v: u16,
     pub i_w: u16,
     pub v_bus: u16,
+    pub temp_cpu: u16,
     pub v_ref: u16,
 
     pub max_duty: u16,

@@ -109,6 +109,7 @@ dependencies = [
  "embassy-sync",
  "embassy-time",
  "foc",
+ "portable-atomic",
  "transport",
  "units",
 ]
@@ -685,6 +686,7 @@ dependencies = [
  "defmt 1.0.1",
  "embassy-time",
  "log",
+ "portable-atomic",
 ]
 
 [[package]]

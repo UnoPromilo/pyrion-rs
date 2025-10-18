@@ -2,8 +2,8 @@ use crate::board::{BoardAdc, BoardInverter};
 use controller_shared::{RawSnapshot, control_step};
 use core::sync::atomic::Ordering;
 use embassy_futures::join::join3;
-use embassy_time::{Duration, Instant, with_timeout};
-use logging::{FreqMeter, info};
+use embassy_time::{Duration, with_timeout};
+use logging::FreqMeter;
 use portable_atomic::AtomicU16;
 
 #[embassy_executor::task]
@@ -17,8 +17,9 @@ pub async fn task_adc(
     let adc_5 = adc.adc5_running;
     let mut inverter_enabled = false;
     let max_duty = inverter.get_max_duty();
+    let controller_state = controller_shared::state::state();
     let mut freq_meter = FreqMeter::named("ADC");
-    let mut last_print = Instant::now();
+    freq_meter.link(&controller_state.foc_loop_frequency);
 
     loop {
         let result = with_timeout(
@@ -30,22 +31,19 @@ pub async fn task_adc(
         let raw_reading = match result {
             Ok(values) => Some(RawSnapshot {
                 i_u: values.0[0],
+
                 i_v: values.1[0],
+                v_ref: values.1[1],
+                v_bus: values.1[2],
+
                 i_w: values.2[0],
-                v_bus: values.2[1],
-                v_ref: values.2[1],
+                temp_cpu: values.2[1],
+
                 max_duty,
                 angle: raw_angle.load(Ordering::Relaxed),
             }),
             Err(_) => None,
         };
-
-        if last_print.elapsed().as_millis() > 1000
-            && let Some(snapshot) = &raw_reading
-        {
-            info!("{:?}", snapshot);
-            last_print = Instant::now();
-        }
 
         let pwm = control_step(&raw_reading);
 

@@ -6,9 +6,10 @@ edition = "2024"
 [features]
 defmt = ["dep:defmt", "embassy-time/defmt"]
 log = ["dep:log", "embassy-time/log"]
-freq-meter =[]
+freq-meter = []
 
 [dependencies]
 defmt = { version = "1.0.1", optional = true }
-embassy-time = {version = "0.5.0"}
+embassy-time = { version = "0.5.0" }
 log = { version = "0.4.14", optional = true }
+portable-atomic = { version = "1.11.1" }

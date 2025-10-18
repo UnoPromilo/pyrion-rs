@@ -12,6 +12,7 @@ use embassy_stm32::time::khz;
 use embassy_stm32::usart;
 use embassy_stm32::usart::Uart;
 use embassy_stm32::{Peripherals, bind_interrupts, i2c};
+use embassy_time::{Duration, Timer};
 use inverter::Inverter;
 
 bind_interrupts!(struct Irqs{
@@ -38,9 +39,9 @@ pub struct BoardAdc<'a> {
     pub _adc4: Adc<'a, ADC4, Taken>,
     pub _adc5: Adc<'a, ADC5, Taken>,
 
-    pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>,
-    pub adc4_running: adc::injected::Running<ADC4, Continuous, 2>,
-    pub adc5_running: adc::injected::Running<ADC5, Continuous, 2>,
+    pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>, // I_U
+    pub adc4_running: adc::injected::Running<ADC4, Continuous, 3>, // I_V, V_REF, V_BUS
+    pub adc5_running: adc::injected::Running<ADC5, Continuous, 2>, // I_W, Temp
 }
 
 pub type BoardInverter<'a> = Inverter<'a, TIM1>;
@@ -75,7 +76,8 @@ impl Board<'static> {
             let adc4 = Adc::new(peripherals.ADC4, adc_config);
             let adc5 = Adc::new(peripherals.ADC5, adc_config);
 
-            let v_ref_int = adc5.enable_vrefint();
+            let v_ref_int = adc4.enable_vrefint();
+            let temp = adc5.enable_temperature();
 
             let (adc3, adc3_configured) = adc3.configure_injected_ext_trigger(
                 ExtTriggerSourceADC345::T1_TRGO,
@@ -97,6 +99,7 @@ impl Board<'static> {
             let adc4_running = adc4_configured.start(
                 [
                     (peripherals.PB15.degrade_adc(), SampleTime::CYCLES6_5),
+                    (v_ref_int.degrade_adc(), SampleTime::CYCLES24_5),
                     (peripherals.PB14.degrade_adc(), SampleTime::CYCLES6_5),
                 ],
                 Irqs,
@@ -104,10 +107,14 @@ impl Board<'static> {
             let adc5_running = adc5_configured.start(
                 [
                     (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5),
-                    (v_ref_int.degrade_adc(), SampleTime::CYCLES6_5),
+                    (temp.degrade_adc(), SampleTime::CYCLES24_5),
                 ],
                 Irqs,
             );
+            
+            // Wait for ADC startup
+            Timer::after(Duration::from_millis(100)).await;
+
             BoardAdc {
                 _adc3: adc3,
                 _adc4: adc4,

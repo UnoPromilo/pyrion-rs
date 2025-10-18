@@ -3,7 +3,6 @@
 #![allow(clippy::bool_comparison)]
 
 use embassy_executor::Spawner;
-use embassy_futures::yield_now;
 use portable_atomic::AtomicU16;
 use static_cell::StaticCell;
 
@@ -30,7 +29,4 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(app::task_encoder(board_encoder, raw_angle));
     spawner.must_spawn(app::task_adc(board_adc, board_inverter, raw_angle));
     spawner.must_spawn(app::task_uart(board_uart, board_crc));
-    loop {
-        yield_now().await;
-    }
 }

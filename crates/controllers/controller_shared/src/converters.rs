@@ -1,5 +1,6 @@
 use units::si::electric_potential::millivolt;
-use units::{ElectricCurrent, ElectricPotential, ElectricalResistance};
+use units::si::thermodynamic_temperature::degree_celsius;
+use units::{ElectricCurrent, ElectricPotential, ElectricalResistance, ThermodynamicTemperature};
 
 pub fn convert_to_current(
     sample: u16,
@@ -14,6 +15,15 @@ pub fn convert_to_current(
 pub fn convert_to_voltage(sample: i32, vrefint_sample: u16) -> ElectricPotential {
     let mv = convert_to_millivolts(sample, vrefint_sample);
     ElectricPotential::new::<millivolt>(mv as f32)
+}
+
+pub fn convert_to_temperature(sample: u16, vrefint_sample: u16) -> ThermodynamicTemperature {
+    // Check the RM0440 and DS12288 for more details on temperature sensor and how to use calibration values
+    const V30: i32 = 760; // mV
+    const AVG_SLOPE: f32 = 2.5; // mV/C
+    let mv = convert_to_millivolts(sample as i32, vrefint_sample);
+    let temp_c = (mv - V30) as f32 / AVG_SLOPE + 30.0;
+    ThermodynamicTemperature::new::<degree_celsius>(temp_c)
 }
 
 fn convert_to_millivolts(sample: i32, vrefint_sample: u16) -> i32 {
