@@ -27,8 +27,8 @@ pub fn convert_to_temperature(sample: u16, vrefint_sample: u16) -> Thermodynamic
 }
 
 fn convert_to_millivolts(sample: i32, vrefint_sample: u16) -> i32 {
-    const VREFINT_MV: i64 = 1210; // mV
-    ((sample as i64) * VREFINT_MV / (vrefint_sample as i64)) as i32
+    const VREFINT_MV: i32 = 1210; // mV
+    (sample) * VREFINT_MV / (vrefint_sample as i32)
 }
 
 #[derive(Debug)]

@@ -24,6 +24,7 @@ bind_interrupts!(struct Irqs{
     I2C1_ER => i2c::ErrorInterruptHandler<I2C1>;
 
     LPUART1 => usart::InterruptHandler<LPUART1>;
+
 });
 
 pub struct Board<'a> {

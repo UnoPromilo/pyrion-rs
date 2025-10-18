@@ -2,7 +2,7 @@ use crate::board::{BoardAdc, BoardInverter};
 use controller_shared::{RawSnapshot, control_step};
 use core::sync::atomic::Ordering;
 use embassy_futures::join::join3;
-use embassy_time::{Duration, with_timeout};
+use embassy_time::{Duration, Instant, with_timeout};
 use logging::FreqMeter;
 use portable_atomic::AtomicU16;
 
@@ -27,6 +27,7 @@ pub async fn task_adc(
             join3(adc_3.read_next(), adc_4.read_next(), adc_5.read_next()),
         )
         .await;
+        let start_time = Instant::now();
 
         let raw_reading = match result {
             Ok(values) => Some(RawSnapshot {
@@ -62,6 +63,11 @@ pub async fn task_adc(
                 }
             }
         }
+
         freq_meter.tick();
+        let elapsed_us = start_time.elapsed().as_micros() as u16;
+        controller_state
+            .last_foc_loop_time_us
+            .store(elapsed_us, Ordering::Relaxed);
     }
 }

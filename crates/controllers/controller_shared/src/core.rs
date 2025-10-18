@@ -1,5 +1,5 @@
 use crate::converters::{
-    convert_to_current, convert_to_temperature, convert_to_voltage, ConfigValues,
+    ConfigValues, convert_to_current, convert_to_temperature, convert_to_voltage,
 };
 use crate::io::{RawInverterValues, RawSnapshot};
 use core::sync::atomic::Ordering;
@@ -17,7 +17,6 @@ pub fn control_step(raw_snapshot: &Option<RawSnapshot>) -> Option<RawInverterVal
             let cpu_temp = convert_to_temperature(values.temp_cpu, values.v_ref);
 
             store_in_state(i_u, i_v, i_w, bus_voltage, cpu_temp);
-
             Some(ControlSnapshot {
                 phase_current: [i_u, i_v, i_w],
                 bus_voltage,
@@ -42,9 +41,9 @@ pub fn store_in_state(
 ) {
     let state = crate::state::state();
 
-    state.cpu_temp.store(cpu_temp.value, Ordering::Relaxed);
-    state.i_u.store(i_u.value, Ordering::Relaxed);
-    state.i_v.store(i_v.value, Ordering::Relaxed);
-    state.i_w.store(i_w.value, Ordering::Relaxed);
-    state.v_bus.store(v_bus.value, Ordering::Relaxed);
+    state.cpu_temp.store(cpu_temp, Ordering::Relaxed);
+    state.i_u.store(i_u, Ordering::Relaxed);
+    state.i_v.store(i_v, Ordering::Relaxed);
+    state.i_w.store(i_w, Ordering::Relaxed);
+    state.v_bus.store(v_bus, Ordering::Relaxed);
 }
