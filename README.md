@@ -1,8 +1,11 @@
-# BLDC Motor Controller Firmware for STM32G474
-This is a bare-metal, async motor controller firmware for 3-phase BLDC motors running on the ~~Raspberry Pi Pico (RP2040)~~ STM32G4. It uses Rust, Embassy async runtime, and no_std environment.
+# Pyrion ESC
 
-# To run debugger (To be updated)
-1. Run `cargo run` to upload code
-2. Run `openocd -f interface/cmsis-dap.cfg -f target/stm32g4***.cfg -c "adapter speed 5000"` to run openocd server
-3. Run `picocom /dev/tty.usbmodem12302 -b 115200` to start serial monitor
-4. Run *__Debugger__* configuration to start debugging
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+
+Firmware for Pyrion, an open-source ESC for BLDC motors, written in Rust.
+
+Currently in alpha, targeting STM32G4 boards.
+
+## License
+
+The software is released under the GNU General Public License version 3.0
