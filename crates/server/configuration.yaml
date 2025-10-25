@@ -1,3 +1,8 @@
 application:
   host: "[::1]"
   port: 9999
+
+interfaces:
+  serial:
+    enabled: true
+    show_only_usb: true

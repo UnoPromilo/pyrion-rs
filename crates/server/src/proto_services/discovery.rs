@@ -3,7 +3,7 @@ use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 
 mod proto {
-    tonic::include_proto!("discovery");
+    tonic::include_proto!("pyrion.v1.discovery");
 }
 
 use crate::interface::{InterfaceManager, InterfaceType};
@@ -22,6 +22,7 @@ impl DeviceDiscoveryService {
 
 #[tonic::async_trait]
 impl proto::device_discovery_server::DeviceDiscovery for DeviceDiscoveryService {
+    #[tracing::instrument(skip(self))]
     async fn list_devices(
         &self,
         _request: Request<proto::DiscoveryParams>,

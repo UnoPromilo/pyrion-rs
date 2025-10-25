@@ -23,7 +23,7 @@ impl InterfaceManager {
             match interface.discover_devices() {
                 Ok(devices) => all_devices.extend(devices),
                 Err(e) => {
-                    log::warn!(
+                    tracing::warn!(
                         "Failed to discover devices on {} interface: {}",
                         interface.interface_type(),
                         e
