@@ -1,0 +1,3 @@
+[submodule "crates/server/proto"]
+	path = crates/server/proto
+	url = https://github.com/UnoPromilo/pyrion-proto.git
