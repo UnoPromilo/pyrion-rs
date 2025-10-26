@@ -1,5 +1,7 @@
 pub mod configuration;
+pub mod interface;
 mod proto_services;
-pub mod startup;
 mod serial;
-mod interface;
+pub mod startup;
+
+pub mod proto;
