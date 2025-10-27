@@ -4,14 +4,9 @@ use core::sync::atomic::Ordering;
 use embassy_futures::join::join3;
 use embassy_time::{Duration, Instant, with_timeout};
 use logging::FreqMeter;
-use portable_atomic::AtomicU16;
 
 #[embassy_executor::task]
-pub async fn task_adc(
-    adc: BoardAdc<'static>,
-    mut inverter: BoardInverter<'static>,
-    raw_angle: &'static AtomicU16,
-) {
+pub async fn task_adc(adc: BoardAdc<'static>, mut inverter: BoardInverter<'static>) {
     let adc_3 = adc.adc3_running;
     let adc_4 = adc.adc4_running;
     let adc_5 = adc.adc5_running;
@@ -41,7 +36,7 @@ pub async fn task_adc(
                 temp_cpu: values.2[1],
 
                 max_duty,
-                angle: raw_angle.load(Ordering::Relaxed),
+                angle: controller_state.raw_angle.load(Ordering::Relaxed),
             }),
             Err(_) => None,
         };

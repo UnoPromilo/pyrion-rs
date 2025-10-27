@@ -1,0 +1,16 @@
+[package]
+name = "command-handler"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+defmt = ["dep:defmt", "logging/defmt", "controller-shared/defmt", "transport/defmt"]
+log = ["logging/log"]
+
+[dependencies]
+controller-shared = { path = "../controllers/controller_shared" }
+defmt = { version = "1.0.1", optional = true }
+logging = { path = "../utils/logging" }
+transport = { path = "../transport" }
+units = { path = "../utils/units" }
+embassy-stm32 = { version = "0.4.0", features = ["stm32g474re"] }

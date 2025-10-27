@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 pub mod pyrion {
     pub mod v1 {
         pub mod discovery {
@@ -12,8 +13,8 @@ pub mod pyrion {
         pub mod device_message {
             tonic::include_proto!("pyrion.v1.device_message");
         }
-        pub mod device_session {
-            tonic::include_proto!("pyrion.v1.device_session");
+        pub mod session {
+            tonic::include_proto!("pyrion.v1.session");
         }
     }
 }

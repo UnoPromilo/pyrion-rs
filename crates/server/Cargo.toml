@@ -14,6 +14,10 @@ anyhow = "1.0.100"
 tokio-serial = "5.4.5"
 tracing = { version = "0.1.41", features = ["log"] }
 env_logger = "0.11.8"
-
+tokio-util = { version = "0.7.16", features = ["codec"] }
+transport = { path = "../transport" }
+crc-engine = { path = "../utils/crc_engine", features = ["software"] }
+futures = "0.3.31"
+uuid = { version = "1.18.1", features = ["v4"] }
 [build-dependencies]
 tonic-prost-build = "0.14.2"

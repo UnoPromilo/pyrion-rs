@@ -1,6 +1,10 @@
-use crate::interface::common::{DeviceInfo, Interface, InterfaceType};
-use crate::interface::error::DiscoveryError;
-use tokio_serial::{SerialPortInfo, SerialPortType, available_ports};
+use crate::features::interface::device_info::DeviceInfo;
+use crate::features::interface::error::{ConnectionError, DiscoveryError};
+use crate::features::interface_kind::InterfaceKind;
+use crate::features::session::DeviceHandle;
+use tokio_serial::{
+    SerialPortBuilderExt, SerialPortInfo, SerialPortType, SerialStream, available_ports,
+};
 
 #[derive(Debug)]
 pub struct SerialInterface {
@@ -13,14 +17,8 @@ impl SerialInterface {
             show_only_usb: config.show_only_usb,
         }
     }
-}
 
-impl Interface for SerialInterface {
-    fn interface_type(&self) -> InterfaceType {
-        InterfaceType::Serial
-    }
-
-    fn discover_devices(&self) -> Result<Vec<DeviceInfo>, DiscoveryError> {
+    pub fn discover_devices(&self) -> Result<Vec<DeviceInfo>, DiscoveryError> {
         let available = available_ports()?;
 
         let devices = available
@@ -30,12 +28,20 @@ impl Interface for SerialInterface {
             })
             .map(|port| DeviceInfo {
                 address: port.port_name.to_string(),
-                interface: InterfaceType::Serial,
+                interface: InterfaceKind::Serial,
                 name: try_get_name(port),
                 firmware: None,
             })
             .collect();
         Ok(devices)
+    }
+
+    pub fn get_device_handler(
+        &self,
+        address: &str,
+    ) -> Result<DeviceHandle<SerialStream>, ConnectionError> {
+        let device = tokio_serial::new(address, 115200).open_native_async()?;
+        Ok(DeviceHandle::new(device))
     }
 }
 

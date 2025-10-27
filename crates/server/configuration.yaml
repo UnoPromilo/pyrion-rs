@@ -1,6 +1,6 @@
 application:
   host: "[::1]"
-  port: 9999
+  port: 7985
 
 interfaces:
   serial:
