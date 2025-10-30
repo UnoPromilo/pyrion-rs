@@ -45,7 +45,13 @@ impl Packet for Event {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Telemetry {
-    pub cpu_temperature: f32,
+    pub cpu_temperature: f32,     // in kelvins
+    pub motor_temperature: f32,   // in kelvins
+    pub v_bus: f32,               // in volts
+    pub power_consumption: f32,   // in watts
+    pub current_consumption: f32, // in amperes
+    pub duty_cycle: f32,          // 0-1
+    pub uptime: u64,              // milliseconds
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -56,20 +62,33 @@ pub struct DeviceIntroduction {
 
 impl Telemetry {
     pub fn serialize(&self, buffer: &mut [u8]) -> usize {
-        let bytes = self.cpu_temperature.to_le_bytes();
-        buffer[..4].copy_from_slice(&bytes);
-        4
+        buffer[..4].copy_from_slice(&self.cpu_temperature.to_le_bytes());
+        buffer[4..8].copy_from_slice(&self.motor_temperature.to_le_bytes());
+        buffer[8..12].copy_from_slice(&self.v_bus.to_le_bytes());
+        buffer[12..16].copy_from_slice(&self.power_consumption.to_le_bytes());
+        buffer[16..20].copy_from_slice(&self.current_consumption.to_le_bytes());
+        buffer[20..24].copy_from_slice(&self.duty_cycle.to_le_bytes());
+        buffer[24..32].copy_from_slice(&self.uptime.to_le_bytes());
+        32
     }
 
     pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
-        let cpu_temperature = data
-            .get(0..4)
-            .ok_or(Error::InvalidContent)?
-            .try_into()
-            .map(f32::from_le_bytes)
-            .map_err(|_| Error::InvalidContent)?;
-
-        Ok(Self { cpu_temperature })
+        let cpu_temperature = decode_f32(&data[0..4])?;
+        let motor_temperature = decode_f32(&data[4..8])?;
+        let v_bus = decode_f32(&data[8..12])?;
+        let power_consumption = decode_f32(&data[12..16])?;
+        let current_consumption = decode_f32(&data[16..20])?;
+        let duty_cycle = decode_f32(&data[20..24])?;
+        let uptime = decode_u64(&data[24..32])?;
+        Ok(Self {
+            cpu_temperature,
+            motor_temperature,
+            v_bus,
+            power_consumption,
+            current_consumption,
+            duty_cycle,
+            uptime,
+        })
     }
 }
 
@@ -95,6 +114,18 @@ pub enum Error {
     InvalidContent,
 }
 
+fn decode_f32(data: &[u8]) -> Result<f32, Error> {
+    data.try_into()
+        .map(f32::from_le_bytes)
+        .map_err(|_| Error::InvalidContent)
+}
+
+fn decode_u64(data: &[u8]) -> Result<u64, Error> {
+    data.try_into()
+        .map(u64::from_le_bytes)
+        .map_err(|_| Error::InvalidContent)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,10 +134,16 @@ mod tests {
     pub fn telemetry_should_serialize_and_deserialize() {
         let telemetry = Telemetry {
             cpu_temperature: 23.0,
+            motor_temperature: 33.0,
+            v_bus: 12.3,
+            power_consumption: 230.0,
+            current_consumption: 27.56,
+            duty_cycle: 22.2222,
+            uptime: u64::MAX,
         };
         let mut buffer = [0u8; 256];
         let length = telemetry.serialize(&mut buffer);
-        assert_eq!(length, 4);
+        assert_eq!(length, 32);
         let deserialized = Telemetry::deserialize(&buffer[..length]).unwrap();
         assert_eq!(deserialized, telemetry);
     }

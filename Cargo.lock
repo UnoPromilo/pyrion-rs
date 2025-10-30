@@ -287,6 +287,7 @@ dependencies = [
  "controller-shared",
  "defmt 1.0.1",
  "embassy-stm32",
+ "embassy-time",
  "logging",
  "transport",
  "units",

@@ -5,4 +5,5 @@ application:
 interfaces:
   serial:
     enabled: true
-    show_only_usb: true
+    show_only_usb_devices: true
+    hide_call_up_devices: true

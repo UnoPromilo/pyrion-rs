@@ -31,5 +31,6 @@ pub struct InterfacesConfiguration {
 #[derive(Deserialize)]
 pub struct SerialConfiguration {
     pub enabled: bool,
-    pub show_only_usb: bool,
+    pub show_only_usb_devices: bool,
+    pub hide_call_up_devices: bool,
 }
