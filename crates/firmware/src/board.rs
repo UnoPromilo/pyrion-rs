@@ -11,7 +11,7 @@ use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, I2C1, LPUART1, TIM1};
 use embassy_stm32::time::khz;
 use embassy_stm32::usart;
 use embassy_stm32::usart::Uart;
-use embassy_stm32::{Peripherals, bind_interrupts, i2c};
+use embassy_stm32::{bind_interrupts, i2c, Peripherals};
 use embassy_time::{Duration, Timer};
 use inverter::Inverter;
 
@@ -112,7 +112,7 @@ impl Board<'static> {
                 ],
                 Irqs,
             );
-            
+
             // Wait for ADC startup
             Timer::after(Duration::from_millis(100)).await;
 
