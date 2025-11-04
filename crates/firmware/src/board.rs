@@ -1,48 +1,74 @@
-use adc::injected::ExtTriggerSourceADC345;
+use adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
 use adc::trigger_edge::ExtTriggerEdge;
 use adc::{Adc, Continuous, Taken};
 use as5600::AS5600;
 use crc_engine::hardware::HardwareCrcEngine;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
+use embassy_stm32::can::{Can, OperatingMode};
 use embassy_stm32::gpio::Speed;
 use embassy_stm32::i2c::{I2c, Master};
 use embassy_stm32::mode::Async;
-use embassy_stm32::peripherals::{ADC3, ADC4, ADC5, I2C1, LPUART1, TIM1};
-use embassy_stm32::time::khz;
-use embassy_stm32::usart;
+use embassy_stm32::pac::rcc::vals::Pllq;
+use embassy_stm32::peripherals::{
+    ADC1, ADC2, ADC3, ADC4, ADC5, FDCAN2, I2C3, I2C4, TIM1, USART1, USB,
+};
+use embassy_stm32::rcc::mux::{Clk48sel, Fdcansel};
+use embassy_stm32::spi::Spi;
+use embassy_stm32::time::{Hertz, khz};
 use embassy_stm32::usart::Uart;
-use embassy_stm32::{bind_interrupts, i2c, Peripherals};
+use embassy_stm32::{Peripherals, bind_interrupts, can, i2c, spi};
+use embassy_stm32::{usart, usb};
 use embassy_time::{Duration, Timer};
 use inverter::Inverter;
 
 bind_interrupts!(struct Irqs{
-    ADC3 => adc::InterruptHandler<ADC3>;
-    ADC4 => adc::InterruptHandler<ADC4>;
-    ADC5 => adc::InterruptHandler<ADC5>;
+    ADC1_2 => adc::MultiInterruptHandler<ADC1, ADC2>;
+    ADC3 => adc::SingleInterruptHandler<ADC3>;
+    ADC4 => adc::SingleInterruptHandler<ADC4>;
+    ADC5 => adc::SingleInterruptHandler<ADC5>;
 
-    I2C1_EV => i2c::EventInterruptHandler<I2C1>;
-    I2C1_ER => i2c::ErrorInterruptHandler<I2C1>;
+    I2C3_EV => i2c::EventInterruptHandler<I2C3>;
+    I2C3_ER => i2c::ErrorInterruptHandler<I2C3>;
 
-    LPUART1 => usart::InterruptHandler<LPUART1>;
+    I2C4_EV => i2c::EventInterruptHandler<I2C4>;
+    I2C4_ER => i2c::ErrorInterruptHandler<I2C4>;
 
+
+    USART1 => usart::InterruptHandler<USART1>;
+
+    USB_LP => usb::InterruptHandler<USB>;
+
+    FDCAN2_IT0 => can::IT0InterruptHandler<FDCAN2>;
+    FDCAN2_IT1 => can::IT1InterruptHandler<FDCAN2>;
 });
 
 pub struct Board<'a> {
     pub adc: BoardAdc<'a>,
-    pub inverter: BoardInverter<'a>,
-    pub encoder: BoardEncoder<'a>,
-    pub uart: BoardUart<'a>,
+    pub can: Can<'a>,
     pub crc: BoardCrc<'a>,
+    pub ext_i2c: I2c<'a, Async, Master>,
+    pub ext_spi: Spi<'a, Async>,
+    pub inverter: BoardInverter<'a>,
+    pub onboard_i2c: I2c<'a, Async, Master>,
+    pub onboard_spi: Spi<'a, Async>,
+    pub uart: BoardUart<'a>,
+    pub usb: usb::Driver<'a, USB>,
+    // hall
+    // leds
 }
 
 pub struct BoardAdc<'a> {
+    pub _adc1: Adc<'a, ADC1, Taken>,
+    pub _adc2: Adc<'a, ADC2, Taken>,
     pub _adc3: Adc<'a, ADC3, Taken>,
     pub _adc4: Adc<'a, ADC4, Taken>,
     pub _adc5: Adc<'a, ADC5, Taken>,
 
-    pub adc3_running: adc::injected::Running<ADC3, Continuous, 1>, // I_U
-    pub adc4_running: adc::injected::Running<ADC4, Continuous, 3>, // I_V, V_REF, V_BUS
-    pub adc5_running: adc::injected::Running<ADC5, Continuous, 2>, // I_W, Temp
+    pub adc1_running: adc::injected::Running<ADC1, Continuous, 3>, // I_U, V_U, Analog_input
+    pub adc2_running: adc::injected::Running<ADC2, Continuous, 3>, // Driver_temp, motor_temp, voltage_sense
+    pub adc3_running: adc::injected::Running<ADC3, Continuous, 2>, // I_V, V_V
+    pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>, // V_Ref
+    pub adc5_running: adc::injected::Running<ADC5, Continuous, 3>, // I_W, V_W, Cpu_temp
 }
 
 pub type BoardInverter<'a> = Inverter<'a, TIM1>;
@@ -54,32 +80,52 @@ impl Board<'static> {
     pub async fn init() -> Result<Self, Error> {
         let peripherals = Self::configure_mcu();
         let crc = HardwareCrcEngine::new(peripherals.CRC);
-        let as5600 = {
+        let onboard_i2c = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
             i2c_config.frequency = khz(100);
-            let i2c = I2c::new(
-                peripherals.I2C1,
-                peripherals.PB8,
-                peripherals.PB9,
+            I2c::new(
+                peripherals.I2C3,
+                peripherals.PC8,
+                peripherals.PC9,
                 Irqs,
                 peripherals.DMA1_CH2,
                 peripherals.DMA1_CH3,
                 i2c_config,
-            );
+            )
+        };
 
-            AS5600::new(i2c, as5600::Config::default()).await?
+        let ext_i2c = {
+            let mut i2c_config = i2c::Config::default();
+            i2c_config.gpio_speed = Speed::VeryHigh;
+            i2c_config.frequency = khz(100);
+            I2c::new(
+                peripherals.I2C4,
+                peripherals.PC6,
+                peripherals.PC7,
+                Irqs,
+                peripherals.DMA1_CH4,
+                peripherals.DMA1_CH5,
+                i2c_config,
+            )
         };
 
         let adc = {
             let adc_config = adc::Config::default();
+            let adc1 = Adc::new(peripherals.ADC1, adc_config);
+            let adc2 = Adc::new(peripherals.ADC2, adc_config);
             let adc3 = Adc::new(peripherals.ADC3, adc_config);
             let adc4 = Adc::new(peripherals.ADC4, adc_config);
             let adc5 = Adc::new(peripherals.ADC5, adc_config);
 
-            let v_ref_int = adc4.enable_vrefint();
-            let temp = adc5.enable_temperature();
-
+            let (adc1, adc1_configured) = adc1.configure_injected_ext_trigger(
+                ExtTriggerSourceADC12::T1_TRGO,
+                ExtTriggerEdge::Rising,
+            );
+            let (adc2, adc2_configured) = adc2.configure_injected_ext_trigger(
+                ExtTriggerSourceADC12::T1_TRGO,
+                ExtTriggerEdge::Rising,
+            );
             let (adc3, adc3_configured) = adc3.configure_injected_ext_trigger(
                 ExtTriggerSourceADC345::T1_TRGO,
                 ExtTriggerEdge::Rising,
@@ -93,22 +139,45 @@ impl Board<'static> {
                 ExtTriggerSourceADC345::T1_TRGO,
                 ExtTriggerEdge::Rising,
             );
-            let adc3_running = adc3_configured.start(
-                [(peripherals.PB13.degrade_adc(), SampleTime::CYCLES6_5)],
-                Irqs,
-            );
-            let adc4_running = adc4_configured.start(
+
+            let adc1_running = adc1_configured.start(
                 [
-                    (peripherals.PB15.degrade_adc(), SampleTime::CYCLES6_5),
-                    (v_ref_int.degrade_adc(), SampleTime::CYCLES24_5),
-                    (peripherals.PB14.degrade_adc(), SampleTime::CYCLES6_5),
+                    (peripherals.PA1.degrade_adc(), SampleTime::CYCLES6_5), // Current U, Ch2
+                    (peripherals.PA2.degrade_adc(), SampleTime::CYCLES6_5), // Voltage U, Ch3
+                    (peripherals.PA3.degrade_adc(), SampleTime::CYCLES6_5), // Analog input, Ch14
                 ],
                 Irqs,
             );
+
+            let adc2_running = adc2_configured.start(
+                [
+                    (peripherals.PB11.degrade_adc(), SampleTime::CYCLES6_5), // Driver temp, Ch14
+                    (peripherals.PC3.degrade_adc(), SampleTime::CYCLES6_5),  // Motor temp, Ch9
+                    (peripherals.PB2.degrade_adc(), SampleTime::CYCLES6_5),  // Voltage sense, Ch12
+                ],
+                Irqs,
+            );
+
+            let adc3_running = adc3_configured.start(
+                [
+                    (peripherals.PB0.degrade_adc(), SampleTime::CYCLES6_5), // Current V, Ch12
+                    (peripherals.PB1.degrade_adc(), SampleTime::CYCLES6_5), // Voltage V, Ch1
+                ],
+                Irqs,
+            );
+
+            let v_ref_int = adc4.enable_vrefint();
+            let adc4_running = adc4_configured.start(
+                [(v_ref_int.degrade_adc(), SampleTime::CYCLES24_5)], // V ref int, Ch18
+                Irqs,
+            );
+
+            let temp = adc5.enable_temperature();
             let adc5_running = adc5_configured.start(
                 [
-                    (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5),
-                    (temp.degrade_adc(), SampleTime::CYCLES24_5),
+                    (peripherals.PA9.degrade_adc(), SampleTime::CYCLES6_5), // Current W, Ch2
+                    (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5), // Voltage W, Ch1
+                    (temp.degrade_adc(), SampleTime::CYCLES47_5),           // Cpu temp, Ch4
                 ],
                 Irqs,
             );
@@ -117,9 +186,13 @@ impl Board<'static> {
             Timer::after(Duration::from_millis(100)).await;
 
             BoardAdc {
+                _adc1: adc1,
+                _adc2: adc2,
                 _adc3: adc3,
                 _adc4: adc4,
                 _adc5: adc5,
+                adc1_running,
+                adc2_running,
                 adc3_running,
                 adc4_running,
                 adc5_running,
@@ -129,9 +202,9 @@ impl Board<'static> {
         let uart = {
             let config = usart::Config::default();
             let uart = Uart::new(
-                peripherals.LPUART1,
-                peripherals.PA3,
-                peripherals.PA2,
+                peripherals.USART1,
+                peripherals.PC5,
+                peripherals.PC4,
                 Irqs,
                 peripherals.DMA1_CH6,
                 peripherals.DMA1_CH7,
@@ -146,20 +219,69 @@ impl Board<'static> {
         let inverter = Inverter::new(
             peripherals.TIM1,
             peripherals.PC0,
-            peripherals.PC13,
+            peripherals.PB13,
             peripherals.PC1,
-            peripherals.PB0,
-            peripherals.PC3,
-            peripherals.PC5,
+            peripherals.PB14,
+            peripherals.PC2,
+            peripherals.PB15,
             khz(30),
         );
 
+        let usb = usb::Driver::new(peripherals.USB, Irqs, peripherals.PA12, peripherals.PA11);
+        let can = {
+            let mut can = can::CanConfigurator::new(
+                peripherals.FDCAN2,
+                peripherals.PB5,
+                peripherals.PB6,
+                Irqs,
+            );
+            can.properties().set_extended_filter(
+                can::filter::ExtendedFilterSlot::_0,
+                can::filter::ExtendedFilter::accept_all_into_fifo1(),
+            );
+            can.set_bitrate(250_000);
+            can.set_fd_data_bitrate(250_000, false);
+            can.start(OperatingMode::NormalOperationMode)
+        };
+        let ext_spi = {
+            let mut config = spi::Config::default();
+            config.frequency = Hertz::mhz(1);
+            Spi::new(
+                peripherals.SPI3,
+                peripherals.PC10,
+                peripherals.PC12,
+                peripherals.PC11,
+                peripherals.DMA1_CH1,
+                peripherals.DMA1_CH8,
+                config,
+            )
+        };
+
+        let onboard_spi = {
+            let mut config = spi::Config::default();
+            config.frequency = Hertz::mhz(1);
+            Spi::new(
+                peripherals.SPI1,
+                peripherals.PA5,
+                peripherals.PA7,
+                peripherals.PA6,
+                peripherals.DMA2_CH1,
+                peripherals.DMA2_CH2,
+                config,
+            )
+        };
+
         Ok(Self {
             adc,
-            inverter,
-            encoder: as5600,
-            uart,
+            can,
             crc,
+            inverter,
+            ext_i2c,
+            ext_spi,
+            onboard_i2c,
+            onboard_spi,
+            uart,
+            usb,
         })
     }
 
@@ -167,18 +289,24 @@ impl Board<'static> {
         let config = {
             use embassy_stm32::rcc::*;
             let mut config = embassy_stm32::Config::default();
+            config.rcc.hse = Some(Hse {
+                freq: Hertz::mhz(24),
+                mode: HseMode::Oscillator,
+            });
             config.rcc.pll = Some(Pll {
-                source: PllSource::HSI,
-                prediv: PllPreDiv::DIV4,
+                source: PllSource::HSE,
+                prediv: PllPreDiv::DIV6,
                 mul: PllMul::MUL85,
                 divp: None,
-                divq: None,
-                // Main system clock at 170 MHz
+                divq: Some(Pllq::DIV8),
                 divr: Some(PllRDiv::DIV2),
             });
+            config.rcc.sys = Sysclk::PLL1_R;
             config.rcc.mux.adc12sel = mux::Adcsel::SYS;
             config.rcc.mux.adc345sel = mux::Adcsel::SYS;
-            config.rcc.sys = Sysclk::PLL1_R;
+            config.rcc.mux.clk48sel = Clk48sel::HSI48;
+            config.rcc.mux.fdcansel = Fdcansel::PLL1_Q;
+            config.rcc.boost = true;
             config
         };
         embassy_stm32::init(config)
@@ -189,11 +317,10 @@ impl Board<'static> {
     ) -> (
         BoardAdc<'static>,
         BoardInverter<'static>,
-        BoardEncoder<'static>,
         BoardUart<'static>,
         BoardCrc<'static>,
     ) {
-        (self.adc, self.inverter, self.encoder, self.uart, self.crc)
+        (self.adc, self.inverter, self.uart, self.crc)
     }
 }
 

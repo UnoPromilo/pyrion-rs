@@ -13,4 +13,4 @@ pub mod trigger_edge;
 
 pub use adc::*;
 pub use config::*;
-pub use interrupt::InterruptHandler;
+pub use interrupt::{SingleInterruptHandler, MultiInterruptHandler};

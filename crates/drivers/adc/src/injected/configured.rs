@@ -1,9 +1,8 @@
 use crate::injected::AnyExtTrigger;
 use crate::injected::pac::ModifyPac;
 use crate::injected::running::Running;
-use crate::{
-    AdcInstance, Continuous, EndOfConversionSignal, InterruptHandler, Single, define_channels_mod,
-};
+use crate::interrupt::InterruptHandler;
+use crate::{AdcInstance, Continuous, EndOfConversionSignal, Single, define_channels_mod};
 use core::marker::PhantomData;
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Binding;
@@ -28,13 +27,14 @@ impl<I: AdcInstance> Configured<I, Single> {
     }
 
     #[allow(dead_code)]
-    pub fn prepare<const CHANNELS: usize>(
+    pub fn prepare<const CHANNELS: usize, H>(
         self,
         sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
-        _irq: impl Binding<I::Interrupt, InterruptHandler<I>>,
+        _irq: impl Binding<I::Interrupt, H>,
     ) -> Running<I, Single, CHANNELS>
     where
         channels::ConstU<CHANNELS>: channels::Channels,
+        H: InterruptHandler<I::Interrupt>,
     {
         Running::<I, Single, CHANNELS>::new(self, sequence)
     }
@@ -71,13 +71,14 @@ impl<I: AdcInstance> Configured<I, Continuous> {
         }
     }
 
-    pub fn start<const CHANNELS: usize>(
+    pub fn start<const CHANNELS: usize, H>(
         self,
         sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
-        _irq: impl Binding<I::Interrupt, InterruptHandler<I>>,
+        _irq: impl Binding<I::Interrupt, H>,
     ) -> Running<I, Continuous, CHANNELS>
     where
         channels::ConstU<CHANNELS>: channels::Channels,
+        H: InterruptHandler<I::Interrupt>,
     {
         Running::<I, Continuous, CHANNELS>::new(self, sequence)
     }

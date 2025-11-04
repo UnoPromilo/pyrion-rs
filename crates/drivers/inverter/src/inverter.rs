@@ -4,7 +4,7 @@ use embassy_stm32::timer::complementary_pwm::{ComplementaryPwm, ComplementaryPwm
 use embassy_stm32::timer::low_level::CountingMode;
 use embassy_stm32::timer::simple_pwm::PwmPin;
 use embassy_stm32::timer::{
-    AdvancedInstance4Channel, Ch1, Ch2, Ch4, Channel, TimerComplementaryPin, TimerPin,
+    AdvancedInstance4Channel, Ch1, Ch2, Ch3, Channel, TimerComplementaryPin, TimerPin,
 };
 use embassy_stm32::{Peri, pac};
 use logging::debug;
@@ -24,8 +24,8 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
         ch_un: Peri<'a, impl TimerComplementaryPin<T, Ch1>>,
         ch_v: Peri<'a, impl TimerPin<T, Ch2>>,
         ch_vn: Peri<'a, impl TimerComplementaryPin<T, Ch2>>,
-        ch_w: Peri<'a, impl TimerPin<T, Ch4>>,
-        ch_wn: Peri<'a, impl TimerComplementaryPin<T, Ch4>>,
+        ch_w: Peri<'a, impl TimerPin<T, Ch3>>,
+        ch_wn: Peri<'a, impl TimerComplementaryPin<T, Ch3>>,
         freq: Hertz,
     ) -> Self {
         let ch_u = PwmPin::new(ch_u, OutputType::PushPull);
@@ -41,10 +41,10 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
             Some(ch_un),
             Some(ch_v),
             Some(ch_vn),
-            None,
-            None,
             Some(ch_w),
             Some(ch_wn),
+            None,
+            None,
             freq,
             CountingMode::CenterAlignedDownInterrupts,
         );
@@ -63,7 +63,7 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
             TRGO_OFFSET,
         );
 
-        pwm.set_duty(Channel::Ch3, pwm.get_max_duty() - TRGO_OFFSET);
+        pwm.set_duty(Channel::Ch4, pwm.get_max_duty() - TRGO_OFFSET);
         Self::configure_trgo();
 
         Self { pwm }
@@ -84,7 +84,7 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
     pub fn set_phase_duties(&mut self, u: u16, v: u16, w: u16) {
         self.pwm.set_duty(Channel::Ch1, u);
         self.pwm.set_duty(Channel::Ch2, v);
-        self.pwm.set_duty(Channel::Ch4, w);
+        self.pwm.set_duty(Channel::Ch3, w);
     }
 
     pub fn get_max_duty(&self) -> u16 {
@@ -96,7 +96,7 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
         unsafe {
             pac::timer::TimAdv::from_ptr(T::regs())
                 .cr2()
-                .modify(|reg| reg.set_mms(Mms::COMPARE_OC3))
+                .modify(|reg| reg.set_mms(Mms::COMPARE_OC4))
         }
     }
 }

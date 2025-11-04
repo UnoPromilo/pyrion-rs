@@ -1,12 +1,14 @@
 use crate::board::{BoardAdc, BoardInverter};
 use controller_shared::{RawSnapshot, control_step};
 use core::sync::atomic::Ordering;
-use embassy_futures::join::join3;
+use embassy_futures::join::join5;
 use embassy_time::{Duration, Instant, with_timeout};
 use logging::FreqMeter;
 
 #[embassy_executor::task]
 pub async fn task_adc(adc: BoardAdc<'static>, mut inverter: BoardInverter<'static>) {
+    let adc_1 = adc.adc1_running;
+    let adc_2 = adc.adc2_running;
     let adc_3 = adc.adc3_running;
     let adc_4 = adc.adc4_running;
     let adc_5 = adc.adc5_running;
@@ -18,22 +20,35 @@ pub async fn task_adc(adc: BoardAdc<'static>, mut inverter: BoardInverter<'stati
 
     loop {
         let result = with_timeout(
-            Duration::from_millis(10),
-            join3(adc_3.read_next(), adc_4.read_next(), adc_5.read_next()),
+            Duration::from_millis(100),
+            join5(
+                adc_1.read_next(),
+                adc_2.read_next(),
+                adc_3.read_next(),
+                adc_4.read_next(),
+                adc_5.read_next(),
+            ),
         )
         .await;
         let start_time = Instant::now();
-
         let raw_reading = match result {
             Ok(values) => Some(RawSnapshot {
                 i_u: values.0[0],
+                i_v: values.2[0],
+                i_w: values.4[0],
 
-                i_v: values.1[0],
-                v_ref: values.1[1],
+                v_u: values.0[1],
+                v_v: values.2[1],
+                v_w: values.4[1],
+
+                v_ref: values.3[0],
                 v_bus: values.1[2],
 
-                i_w: values.2[0],
-                temp_cpu: values.2[1],
+                temp_cpu: values.4[2],
+                temp_motor: values.1[1],
+                temp_driver: values.1[0],
+
+                analog_input: values.0[2],
 
                 max_duty,
                 angle: controller_state.raw_angle.load(Ordering::Relaxed),

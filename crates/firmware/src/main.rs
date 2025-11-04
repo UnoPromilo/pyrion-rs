@@ -24,8 +24,8 @@ async fn main(spawner: Spawner) {
             }
         }
     };
-    let (board_adc, board_inverter, board_encoder, board_uart, board_crc) = board.split();
-    spawner.must_spawn(app::task_encoder(board_encoder));
+    let (board_adc, board_inverter, board_uart, board_crc) = board.split();
+    //spawner.must_spawn(app::task_encoder(board_encoder));
     spawner.must_spawn(app::task_adc(board_adc, board_inverter));
     spawner.must_spawn(app::task_uart(board_uart, board_crc));
 }
