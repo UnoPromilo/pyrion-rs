@@ -1,11 +1,10 @@
 use adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
 use adc::trigger_edge::ExtTriggerEdge;
 use adc::{Adc, Continuous, Taken};
-use as5600::AS5600;
 use crc_engine::hardware::HardwareCrcEngine;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::can::{Can, OperatingMode};
-use embassy_stm32::gpio::Speed;
+use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::i2c::{I2c, Master};
 use embassy_stm32::mode::Async;
 use embassy_stm32::pac::rcc::vals::Pllq;
@@ -44,17 +43,17 @@ bind_interrupts!(struct Irqs{
 
 pub struct Board<'a> {
     pub adc: BoardAdc<'a>,
-    pub can: Can<'a>,
+    pub can: BoardCan<'a>,
     pub crc: BoardCrc<'a>,
-    pub ext_i2c: I2c<'a, Async, Master>,
-    pub ext_spi: Spi<'a, Async>,
+    pub ext_i2c: BoardI2c<'a>,
+    pub ext_spi: BoardSpi<'a>,
     pub inverter: BoardInverter<'a>,
-    pub onboard_i2c: I2c<'a, Async, Master>,
-    pub onboard_spi: Spi<'a, Async>,
+    pub leds: BoardLeds<'a>,
+    pub onboard_i2c: BoardI2c<'a>,
+    pub onboard_spi: BoardSpi<'a>,
     pub uart: BoardUart<'a>,
-    pub usb: usb::Driver<'a, USB>,
+    pub usb: BoardUsb<'a>,
     // hall
-    // leds
 }
 
 pub struct BoardAdc<'a> {
@@ -70,11 +69,17 @@ pub struct BoardAdc<'a> {
     pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>, // V_Ref
     pub adc5_running: adc::injected::Running<ADC5, Continuous, 3>, // I_W, V_W, Cpu_temp
 }
-
-pub type BoardInverter<'a> = Inverter<'a, TIM1>;
-pub type BoardEncoder<'a> = AS5600<I2c<'a, Async, Master>>;
-pub type BoardUart<'a> = Uart<'a, Async>;
+pub type BoardCan<'a> = Can<'a>;
 pub type BoardCrc<'a> = HardwareCrcEngine<'a>;
+pub type BoardI2c<'a> = I2c<'a, Async, Master>;
+pub type BoardInverter<'a> = Inverter<'a, TIM1>;
+pub struct BoardLeds<'a> {
+    pub green: Output<'a>,
+    pub red: Output<'a>,
+}
+pub type BoardSpi<'a> = Spi<'a, Async>;
+pub type BoardUart<'a> = Uart<'a, Async>;
+pub type BoardUsb<'a> = usb::Driver<'a, USB>;
 
 impl Board<'static> {
     pub async fn init() -> Result<Self, Error> {
@@ -271,11 +276,17 @@ impl Board<'static> {
             )
         };
 
+        let leds = BoardLeds {
+            green: Output::new(peripherals.PB9, Level::Low, Speed::Low),
+            red: Output::new(peripherals.PB7, Level::Low, Speed::Low),
+        };
+
         Ok(Self {
             adc,
             can,
             crc,
             inverter,
+            leds,
             ext_i2c,
             ext_spi,
             onboard_i2c,
@@ -319,8 +330,9 @@ impl Board<'static> {
         BoardInverter<'static>,
         BoardUart<'static>,
         BoardCrc<'static>,
+        BoardUsb<'static>,
     ) {
-        (self.adc, self.inverter, self.uart, self.crc)
+        (self.adc, self.inverter, self.uart, self.crc, self.usb)
     }
 }
 

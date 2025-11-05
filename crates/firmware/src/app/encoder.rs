@@ -1,5 +1,4 @@
-use crate::board::BoardEncoder;
-use core::sync::atomic::Ordering;
+/*use core::sync::atomic::Ordering;
 use embassy_time::{Duration, Timer};
 use logging::{FreqMeter, error};
 
@@ -21,3 +20,4 @@ pub async fn task_encoder(mut encoder: BoardEncoder<'static>) {
         freq_meter.tick();
     }
 }
+*/
