@@ -224,7 +224,7 @@ impl Board<'static> {
             peripherals.PB14,
             peripherals.PC2,
             peripherals.PB15,
-            khz(30),
+            khz(40),
         );
 
         let usb = usb::Driver::new(peripherals.USB, Irqs, peripherals.PA12, peripherals.PA11);

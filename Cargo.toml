@@ -3,7 +3,10 @@ members = ["crates/drivers/as5600", "crates/drivers/adc", "crates/hal", "crates/
 resolver = "3"
 
 [profile.release]
+lto = "fat"
 debug = 2
-lto = true
-opt-level = 'z'
+
+[profile.release.package.firmware]
+opt-level = 3
+codegen-units = 1
 

@@ -26,7 +26,7 @@ pub fn control_step(raw_snapshot: &Option<RawSnapshot>) -> Option<RawInverterVal
     };
 
     Some(RawInverterValues {
-        u: 1400,
+        u: 140,
         v: 0,
         w: 0,
     })
