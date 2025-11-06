@@ -2,7 +2,8 @@ pub const PACKET_SIZE: usize = 64;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Packet {
-    pub interface: Interface,
+    // None means it is a broadcast packet
+    pub interface: Option<Interface>,
     pub buffer: [u8; PACKET_SIZE],
     pub length: usize,
 }
@@ -14,7 +15,7 @@ pub enum Interface {
 }
 
 impl Packet {
-    pub fn empty(interface: Interface) -> Self {
+    pub fn empty(interface: Option<Interface>) -> Self {
         Self {
             interface,
             buffer: [0u8; PACKET_SIZE],
@@ -22,7 +23,7 @@ impl Packet {
         }
     }
 
-    pub fn from_slice(slice: &[u8], interface: Interface) -> Self {
+    pub fn from_slice(slice: &[u8], interface: Option<Interface>) -> Self {
         assert!(slice.len() <= PACKET_SIZE, "Slice is too large");
         let mut buffer = [0u8; PACKET_SIZE];
         buffer[..slice.len()].copy_from_slice(slice);
@@ -36,7 +37,7 @@ impl Packet {
 
 pub fn split_into_packets<'a>(
     data: &'a [u8],
-    interface: Interface,
+    interface: Option<Interface>,
 ) -> impl Iterator<Item = Packet> + 'a {
     core::iter::successors(Some(data), |overflow_data| {
         (overflow_data.len() > PACKET_SIZE).then(|| &overflow_data[PACKET_SIZE..])
@@ -49,4 +50,14 @@ pub fn split_into_packets<'a>(
         (!data.is_empty() && data.len().is_multiple_of(PACKET_SIZE))
             .then(|| Packet::empty(interface)),
     )
+}
+
+impl Packet {
+    pub fn is_for_usb(&self) -> bool {
+        matches!(self.interface, Some(Interface::Usb) | None)
+    }
+
+    pub fn is_for_serial(&self) -> bool {
+        matches!(self.interface, Some(Interface::Serial) | None) && self.length > 0
+    }
 }

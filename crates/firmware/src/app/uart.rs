@@ -21,7 +21,7 @@ pub async fn task_uart(uart: BoardUart<'static>) {
     let rx_fut = async move {
         loop {
             let packet = rx_subscriber.next_message_pure().await;
-            if matches!(packet.interface, Interface::Serial) && packet.length > 0 {
+            if packet.is_for_serial() {
                 send_buffer(&mut tx, &packet.buffer[..packet.length]).await;
             }
         }
@@ -40,7 +40,7 @@ async fn handle_uart(uart_result: Result<usize, embassy_stm32::usart::Error>, da
     };
 
     // data is <= than PACKET_SIZE, so there is no need to split
-    let packet = Packet::from_slice(&data[..size], Interface::Serial);
+    let packet = Packet::from_slice(&data[..size], Some(Interface::Serial));
     COMMAND_CHANNEL.send(packet).await;
 }
 

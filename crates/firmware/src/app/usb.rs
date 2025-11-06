@@ -55,7 +55,7 @@ async fn handle_tx<'a>(
 ) -> Result<(), EndpointError> {
     loop {
         let packet = rx_subscriber.next_message_pure().await;
-        if matches!(packet.interface, Interface::Usb) {
+        if packet.is_for_usb() {
             tx.write_packet(&packet.buffer[..packet.length]).await?;
         }
     }
@@ -65,7 +65,7 @@ async fn handle_rx<'a>(rx: &mut Receiver<'a, BoardUsb<'a>>) -> Result<(), Endpoi
     let mut buffer = [0; 64];
     loop {
         let len = rx.read_packet(&mut buffer).await?;
-        let packet = Packet::from_slice(&buffer[..len], Interface::Usb);
+        let packet = Packet::from_slice(&buffer[..len], Some(Interface::Usb));
         COMMAND_CHANNEL.send(packet).await;
     }
 }
