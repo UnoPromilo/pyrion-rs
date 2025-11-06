@@ -17,7 +17,6 @@ use embassy_stm32::time::{Hertz, khz};
 use embassy_stm32::usart::Uart;
 use embassy_stm32::{Peripherals, bind_interrupts, can, i2c, spi};
 use embassy_stm32::{usart, usb};
-use embassy_time::{Duration, Timer};
 use inverter::Inverter;
 
 bind_interrupts!(struct Irqs{
@@ -82,7 +81,7 @@ pub type BoardUart<'a> = Uart<'a, Async>;
 pub type BoardUsb<'a> = usb::Driver<'a, USB>;
 
 impl Board<'static> {
-    pub async fn init() -> Result<Self, Error> {
+    pub fn init() -> Result<Self, Error> {
         let peripherals = Self::configure_mcu();
         let crc = HardwareCrcEngine::new(peripherals.CRC);
         let onboard_i2c = {
@@ -186,9 +185,6 @@ impl Board<'static> {
                 ],
                 Irqs,
             );
-
-            // Wait for ADC startup
-            Timer::after(Duration::from_millis(100)).await;
 
             BoardAdc {
                 _adc1: adc1,

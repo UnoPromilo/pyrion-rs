@@ -1,8 +1,13 @@
 #![no_std]
 #![no_main]
 #![allow(clippy::bool_comparison)]
+
 use crate::version::populate_version;
-use embassy_executor::Spawner;
+use cortex_m_rt::entry;
+use embassy_executor::{Executor, InterruptExecutor};
+use embassy_stm32::interrupt;
+use embassy_stm32::interrupt::{InterruptExt, Priority};
+use static_cell::StaticCell;
 
 mod app;
 mod board;
@@ -11,11 +16,25 @@ mod version;
 #[allow(unused_imports)]
 use {defmt_rtt as _, panic_probe as _};
 
-#[embassy_executor::main]
-async fn main(spawner: Spawner) {
+static EXECUTOR_HIGH: InterruptExecutor = InterruptExecutor::new();
+static EXECUTOR_MED: InterruptExecutor = InterruptExecutor::new();
+static EXECUTOR_LOW: StaticCell<Executor> = StaticCell::new();
+
+#[interrupt]
+unsafe fn UART4() {
+    unsafe { EXECUTOR_HIGH.on_interrupt() }
+}
+
+#[interrupt]
+unsafe fn UART5() {
+    unsafe { EXECUTOR_MED.on_interrupt() }
+}
+
+#[entry]
+fn main() -> ! {
     populate_version();
     let board = {
-        let result = board::Board::init().await;
+        let result = board::Board::init();
         match result {
             Ok(board) => board,
             Err(e) => {
@@ -24,10 +43,19 @@ async fn main(spawner: Spawner) {
         }
     };
     let (board_adc, board_inverter, board_uart, board_crc, board_usb) = board.split();
-    //spawner.must_spawn(app::task_encoder(board_encoder));
-    spawner.must_spawn(app::task_adc(board_adc, board_inverter));
 
-    spawner.must_spawn(app::task_communication(board_crc));
-    spawner.must_spawn(app::task_uart(board_uart));
-    spawner.must_spawn(app::task_usb(board_usb));
+    interrupt::UART4.set_priority(Priority::P6);
+    let high_priority_spawner = EXECUTOR_HIGH.start(interrupt::UART4);
+    high_priority_spawner.must_spawn(app::task_adc(board_adc, board_inverter));
+
+    interrupt::UART5.set_priority(Priority::P7);
+    let _medium_priority_spawner = EXECUTOR_MED.start(interrupt::UART5);
+    //medium_priority_spawner.must_spawn(app::task_encoder(board_encoder));
+
+    let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
+    low_priority_executor.run(|low_priority_spawner| {
+        low_priority_spawner.must_spawn(app::task_communication(board_crc));
+        low_priority_spawner.must_spawn(app::task_uart(board_uart));
+        low_priority_spawner.must_spawn(app::task_usb(board_usb));
+    });
 }
