@@ -72,7 +72,9 @@ impl pyrion_v1::session::device_session_server::DeviceSession for DeviceSessionS
                     next = reader.read_next() => {
                         match next {
                             Some(Ok(event)) => {
-                                tracing::info!("Received event: {:?}", event);
+                                if !matches!(event, Event::Telemetry(_)){
+                                    tracing::info!("Received event: {:?}", event);
+                                }
                                 let device_message = map_event_to_proto(event);
                                 if let Err(error) = tx.send(Ok(device_message)).await {
                                     tracing::error!("Error sending event: {:?}", error);
