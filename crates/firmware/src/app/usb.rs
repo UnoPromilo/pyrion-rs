@@ -6,12 +6,13 @@ use embassy_usb::Builder;
 use embassy_usb::class::cdc_acm::{CdcAcmClass, Receiver, Sender, State};
 use embassy_usb::driver::EndpointError;
 use logging::info;
+use user_config::UserConfig;
 
 #[embassy_executor::task]
-pub async fn task_usb(driver: BoardUsb<'static>) {
+pub async fn task_usb(driver: BoardUsb<'static>, user_config: &'static UserConfig) {
     let mut config = embassy_usb::Config::new(0x1209, 0x2aaa);
     config.manufacturer = Some("UnoProgramo");
-    config.product = Some("Pyrion V1");
+    config.product = Some(user_config.device_name);
     let serial_hex = serial_hex(*embassy_stm32::uid::uid());
     config.serial_number = Some(core::str::from_utf8(&serial_hex).unwrap());
     config.max_power = 500;

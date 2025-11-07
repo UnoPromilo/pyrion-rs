@@ -13,11 +13,12 @@ use embassy_stm32::peripherals::{
 };
 use embassy_stm32::rcc::mux::{Clk48sel, Fdcansel};
 use embassy_stm32::spi::Spi;
-use embassy_stm32::time::{Hertz, khz};
+use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::Uart;
 use embassy_stm32::{Peripherals, bind_interrupts, can, i2c, spi};
 use embassy_stm32::{usart, usb};
 use inverter::Inverter;
+use user_config::UserConfig;
 
 bind_interrupts!(struct Irqs{
     ADC1_2 => adc::MultiInterruptHandler<ADC1, ADC2>;
@@ -81,13 +82,13 @@ pub type BoardUart<'a> = Uart<'a, Async>;
 pub type BoardUsb<'a> = usb::Driver<'a, USB>;
 
 impl Board<'static> {
-    pub fn init() -> Result<Self, Error> {
+    pub fn init(user_config: &UserConfig) -> Result<Self, Error> {
         let peripherals = Self::configure_mcu();
         let crc = HardwareCrcEngine::new(peripherals.CRC);
         let onboard_i2c = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
-            i2c_config.frequency = khz(100);
+            i2c_config.frequency = user_config.onboard_i2c_frequency;
             I2c::new(
                 peripherals.I2C3,
                 peripherals.PC8,
@@ -102,7 +103,7 @@ impl Board<'static> {
         let ext_i2c = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
-            i2c_config.frequency = khz(100);
+            i2c_config.frequency = user_config.external_i2c_frequency;
             I2c::new(
                 peripherals.I2C4,
                 peripherals.PC6,
@@ -225,7 +226,7 @@ impl Board<'static> {
             peripherals.PB14,
             peripherals.PC2,
             peripherals.PB15,
-            khz(40),
+            user_config.pwm_frequency,
         );
 
         let usb = usb::Driver::new(peripherals.USB, Irqs, peripherals.PA12, peripherals.PA11);
@@ -240,13 +241,13 @@ impl Board<'static> {
                 can::filter::ExtendedFilterSlot::_0,
                 can::filter::ExtendedFilter::accept_all_into_fifo1(),
             );
-            can.set_bitrate(250_000);
-            can.set_fd_data_bitrate(250_000, false);
+            can.set_bitrate(user_config.can_bitrate);
+            can.set_fd_data_bitrate(user_config.fd_can_bitrate, false);
             can.start(OperatingMode::NormalOperationMode)
         };
         let ext_spi = {
             let mut config = spi::Config::default();
-            config.frequency = Hertz::mhz(1);
+            config.frequency = user_config.external_spi_frequency;
             Spi::new(
                 peripherals.SPI3,
                 peripherals.PC10,
@@ -260,7 +261,7 @@ impl Board<'static> {
 
         let onboard_spi = {
             let mut config = spi::Config::default();
-            config.frequency = Hertz::mhz(1);
+            config.frequency = user_config.onboard_spi_frequency;
             Spi::new(
                 peripherals.SPI1,
                 peripherals.PA5,

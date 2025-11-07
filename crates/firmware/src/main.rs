@@ -8,6 +8,7 @@ use embassy_executor::{Executor, InterruptExecutor};
 use embassy_stm32::interrupt;
 use embassy_stm32::interrupt::{InterruptExt, Priority};
 use static_cell::StaticCell;
+use user_config::UserConfig;
 
 mod app;
 mod board;
@@ -19,6 +20,7 @@ use {defmt_rtt as _, panic_probe as _};
 static EXECUTOR_HIGH: InterruptExecutor = InterruptExecutor::new();
 static EXECUTOR_MED: InterruptExecutor = InterruptExecutor::new();
 static EXECUTOR_LOW: StaticCell<Executor> = StaticCell::new();
+static USER_CONFIG: StaticCell<UserConfig> = StaticCell::new();
 
 #[interrupt]
 unsafe fn UART4() {
@@ -33,8 +35,9 @@ unsafe fn UART5() {
 #[entry]
 fn main() -> ! {
     populate_version();
+    let user_config = USER_CONFIG.init(UserConfig::default());
     let board = {
-        let result = board::Board::init();
+        let result = board::Board::init(user_config);
         match result {
             Ok(board) => board,
             Err(e) => {
@@ -56,6 +59,6 @@ fn main() -> ! {
     low_priority_executor.run(|low_priority_spawner| {
         low_priority_spawner.must_spawn(app::task_communication(board_crc));
         low_priority_spawner.must_spawn(app::task_uart(board_uart));
-        low_priority_spawner.must_spawn(app::task_usb(board_usb));
+        low_priority_spawner.must_spawn(app::task_usb(board_usb, user_config));
     });
 }

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/drivers/as5600", "crates/drivers/adc", "crates/hal", "crates/math", "crates/utils/logging", "crates/firmware", "crates/drivers/inverter", "crates/controllers/foc", "crates/utils/pid", "crates/utils/units", "crates/controllers/controller_shared", "crates/utils/crc_engine", "crates/transport", "crates/server", "crates/command_handler", "crates/communication"]
+members = ["crates/drivers/as5600", "crates/drivers/adc", "crates/hal", "crates/math", "crates/utils/logging", "crates/firmware", "crates/drivers/inverter", "crates/controllers/foc", "crates/utils/pid", "crates/utils/units", "crates/controllers/controller_shared", "crates/utils/crc_engine", "crates/transport", "crates/server", "crates/command_handler", "crates/communication", "crates/user_config"]
 resolver = "3"
 
 [profile.release]

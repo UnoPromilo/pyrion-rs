@@ -1,0 +1,7 @@
+[package]
+name = "user-config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+embassy-stm32 = { version = "0.4.0", features = ["stm32g474re", "time"] }

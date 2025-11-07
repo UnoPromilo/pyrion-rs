@@ -1020,6 +1020,7 @@ dependencies = [
  "panic-probe",
  "static_cell",
  "transport",
+ "user-config",
 ]
 
 [[package]]
@@ -2672,6 +2673,13 @@ dependencies = [
  "serde",
  "syn 1.0.109",
  "usbd-hid-descriptors",
+]
+
+[[package]]
+name = "user-config"
+version = "0.1.0"
+dependencies = [
+ "embassy-stm32",
 ]
 
 [[package]]

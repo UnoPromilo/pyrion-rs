@@ -6,7 +6,7 @@ use crc_engine::CrcEngine;
 use embassy_futures::select::{Either, select};
 use embassy_sync::pubsub::PubSubBehavior;
 use embassy_time::Duration;
-use logging::{error, info, warn};
+use logging::{error, warn};
 use transport::Event;
 use transport::command::Error;
 use transport::command::decoder::Decoder;
