@@ -10,7 +10,7 @@ log = ["logging/log", "embassy-time/log"]
 [dependencies]
 controller-shared = { path = "../controllers/controller_shared" }
 defmt = { version = "1.0.1", optional = true }
-logging = { path = "../utils/logging" }
+logging = { path = "../utils/logging", features = ["error-register"] }
 transport = { path = "../transport" }
 units = { path = "../utils/units" }
 embassy-stm32 = { version = "0.4.0", features = ["stm32g474re"] }

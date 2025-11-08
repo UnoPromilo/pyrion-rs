@@ -188,12 +188,15 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
         Event::Telemetry(telemetry) => DeviceMessage {
             payload: Some(DeviceMessagePayload::Telemetry(Telemetry {
                 cpu_temp: telemetry.cpu_temperature,
+                driver_temp: telemetry.driver_temperature,
                 motor_temp: telemetry.motor_temperature,
                 v_bus: telemetry.v_bus,
                 power: telemetry.power_consumption,
                 current: telemetry.current_consumption,
                 duty_cycle: telemetry.duty_cycle,
                 uptime: telemetry.uptime,
+                ongoing_errors: telemetry.ongoing_errors,
+                resolved_errors: telemetry.resolved_errors,
             })),
         },
     }

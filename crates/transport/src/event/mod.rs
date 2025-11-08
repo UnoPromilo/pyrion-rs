@@ -46,12 +46,15 @@ impl Packet for Event {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Telemetry {
     pub cpu_temperature: f32,     // in kelvins
+    pub driver_temperature: f32,  // in kelvins
     pub motor_temperature: f32,   // in kelvins
     pub v_bus: f32,               // in volts
     pub power_consumption: f32,   // in watts
     pub current_consumption: f32, // in amperes
     pub duty_cycle: f32,          // 0-1
     pub uptime: u64,              // milliseconds
+    pub ongoing_errors: u32,
+    pub resolved_errors: u32,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -63,31 +66,40 @@ pub struct DeviceIntroduction {
 impl Telemetry {
     pub fn serialize(&self, buffer: &mut [u8]) -> usize {
         buffer[..4].copy_from_slice(&self.cpu_temperature.to_le_bytes());
-        buffer[4..8].copy_from_slice(&self.motor_temperature.to_le_bytes());
-        buffer[8..12].copy_from_slice(&self.v_bus.to_le_bytes());
-        buffer[12..16].copy_from_slice(&self.power_consumption.to_le_bytes());
-        buffer[16..20].copy_from_slice(&self.current_consumption.to_le_bytes());
-        buffer[20..24].copy_from_slice(&self.duty_cycle.to_le_bytes());
-        buffer[24..32].copy_from_slice(&self.uptime.to_le_bytes());
-        32
+        buffer[4..8].copy_from_slice(&self.driver_temperature.to_le_bytes());
+        buffer[8..12].copy_from_slice(&self.motor_temperature.to_le_bytes());
+        buffer[12..16].copy_from_slice(&self.v_bus.to_le_bytes());
+        buffer[16..20].copy_from_slice(&self.power_consumption.to_le_bytes());
+        buffer[20..24].copy_from_slice(&self.current_consumption.to_le_bytes());
+        buffer[24..28].copy_from_slice(&self.duty_cycle.to_le_bytes());
+        buffer[28..36].copy_from_slice(&self.uptime.to_le_bytes());
+        buffer[36..40].copy_from_slice(&self.ongoing_errors.to_le_bytes());
+        buffer[40..44].copy_from_slice(&self.resolved_errors.to_le_bytes());
+        44
     }
 
     pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
         let cpu_temperature = decode_f32(&data[0..4])?;
-        let motor_temperature = decode_f32(&data[4..8])?;
-        let v_bus = decode_f32(&data[8..12])?;
-        let power_consumption = decode_f32(&data[12..16])?;
-        let current_consumption = decode_f32(&data[16..20])?;
-        let duty_cycle = decode_f32(&data[20..24])?;
-        let uptime = decode_u64(&data[24..32])?;
+        let driver_temperature = decode_f32(&data[4..8])?;
+        let motor_temperature = decode_f32(&data[8..12])?;
+        let v_bus = decode_f32(&data[12..16])?;
+        let power_consumption = decode_f32(&data[16..20])?;
+        let current_consumption = decode_f32(&data[20..24])?;
+        let duty_cycle = decode_f32(&data[24..28])?;
+        let uptime = decode_u64(&data[28..36])?;
+        let ongoing_errors = decode_u32(&data[36..40])?;
+        let resolved_errors = decode_u32(&data[40..44])?;
         Ok(Self {
             cpu_temperature,
+            driver_temperature,
             motor_temperature,
             v_bus,
             power_consumption,
             current_consumption,
             duty_cycle,
             uptime,
+            ongoing_errors,
+            resolved_errors,
         })
     }
 }
@@ -126,6 +138,12 @@ fn decode_u64(data: &[u8]) -> Result<u64, Error> {
         .map_err(|_| Error::InvalidContent)
 }
 
+fn decode_u32(data: &[u8]) -> Result<u32, Error> {
+    data.try_into()
+        .map(u32::from_le_bytes)
+        .map_err(|_| Error::InvalidContent)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,16 +152,19 @@ mod tests {
     pub fn telemetry_should_serialize_and_deserialize() {
         let telemetry = Telemetry {
             cpu_temperature: 23.0,
+            driver_temperature: 55.0,
             motor_temperature: 33.0,
             v_bus: 12.3,
             power_consumption: 230.0,
             current_consumption: 27.56,
             duty_cycle: 22.2222,
             uptime: u64::MAX,
+            ongoing_errors: 2,
+            resolved_errors: 4,
         };
         let mut buffer = [0u8; 256];
         let length = telemetry.serialize(&mut buffer);
-        assert_eq!(length, 32);
+        assert_eq!(length, 44);
         let deserialized = Telemetry::deserialize(&buffer[..length]).unwrap();
         assert_eq!(deserialized, telemetry);
     }

@@ -10,7 +10,7 @@ pub enum ErrorValue {
     Resolved = 2,
 }
 
-#[derive(Sequence, Clone, Copy, Debug)]
+#[derive(Sequence, Clone, Copy, Debug, PartialEq)]
 pub enum Error {
     ShaftPositionDetector,
     // add more later
@@ -72,8 +72,8 @@ impl ErrorRegister {
     pub fn get_ongoing(&self) -> impl Iterator<Item = Error> + '_ {
         all::<Error>().filter(|e| self.load(*e) == ErrorValue::Ongoing)
     }
-
-    pub fn is_any_ongoing(&self) -> bool {
-        all::<Error>().any(|e| self.load(e) == ErrorValue::Ongoing)
+    
+    pub fn get_resolved(&self) -> impl Iterator<Item = Error> + '_ {
+        all::<Error>().filter(|e| self.load(*e) == ErrorValue::Resolved)
     }
 }

@@ -32,7 +32,7 @@ as5600 = { path = "../drivers/as5600", features = ["defmt"] }
 controller-shared = { path = "../controllers/controller_shared", features = ["defmt"] }
 crc-engine = { path = "../utils/crc_engine", features = ["hardware"] }
 inverter = { path = "../drivers/inverter", features = ["defmt"] }
-logging = { path = "../utils/logging", features = ["freq-meter"] }
+logging = { path = "../utils/logging", features = ["freq-meter", "error-register"] }
 transport = { path = "../transport", features = ["defmt"] }
 communication = { path = "../communication", features = ["defmt"] }
 user-config = { path = "../user_config", features = ["defmt"] }
