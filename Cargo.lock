@@ -940,6 +940,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-iterator"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4549325971814bda7a44061bf3fe7e487d447cba01e4220a4b454d630d7a016"
+dependencies = [
+ "enum-iterator-derive",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "685adfa4d6f3d765a26bc5dbc936577de9abf756c1feeb3089b01dd395034842"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
 name = "env_filter"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1502,6 +1522,7 @@ version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
  "embassy-time",
+ "enum-iterator",
  "log",
  "portable-atomic",
 ]
@@ -2679,6 +2700,7 @@ dependencies = [
 name = "user-config"
 version = "0.1.0"
 dependencies = [
+ "defmt 1.0.1",
  "embassy-stm32",
 ]
 

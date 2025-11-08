@@ -103,6 +103,8 @@ impl Board<'static> {
         let ext_i2c = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
+            i2c_config.sda_pullup = true;
+            i2c_config.scl_pullup = true;
             i2c_config.frequency = user_config.external_i2c_frequency;
             I2c::new(
                 peripherals.I2C4,
@@ -318,18 +320,6 @@ impl Board<'static> {
             config
         };
         embassy_stm32::init(config)
-    }
-
-    pub fn split(
-        self,
-    ) -> (
-        BoardAdc<'static>,
-        BoardInverter<'static>,
-        BoardUart<'static>,
-        BoardCrc<'static>,
-        BoardUsb<'static>,
-    ) {
-        (self.adc, self.inverter, self.uart, self.crc, self.usb)
     }
 }
 

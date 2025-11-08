@@ -15,14 +15,12 @@ impl<I2C> AS5600<I2C>
 where
     I2C: i2c::I2c,
 {
-    pub async fn new(i2c: I2C, config: Config) -> Result<Self> {
-        debug!("Initializing AS5600");
-        let mut as5600 = Self { i2c, config };
-        as5600.write_config().await?;
-        Ok(as5600)
+    pub fn new(i2c: I2C, config: Config) -> Self {
+        Self { i2c, config }
     }
 
     pub async fn write_config(&mut self) -> Result<()> {
+        debug!("Writing config");
         self.write_u8(Register::ConfHigh, self.config.get_high_config_byte())
             .await?;
         self.write_u8(Register::ConfLow, self.config.get_low_config_byte())

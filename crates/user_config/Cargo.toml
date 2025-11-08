@@ -3,5 +3,9 @@ name = "user-config"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+defmt = ["dep:defmt"]
+
 [dependencies]
 embassy-stm32 = { version = "0.4.0", features = ["stm32g474re", "time"] }
+defmt = {version = "1.0.1", optional = true}

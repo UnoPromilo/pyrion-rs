@@ -45,20 +45,19 @@ fn main() -> ! {
             }
         }
     };
-    let (board_adc, board_inverter, board_uart, board_crc, board_usb) = board.split();
 
     interrupt::UART4.set_priority(Priority::P6);
     let high_priority_spawner = EXECUTOR_HIGH.start(interrupt::UART4);
-    high_priority_spawner.must_spawn(app::task_adc(board_adc, board_inverter));
+    high_priority_spawner.must_spawn(app::task_adc(board.adc, board.inverter));
 
     interrupt::UART5.set_priority(Priority::P7);
-    let _medium_priority_spawner = EXECUTOR_MED.start(interrupt::UART5);
-    //medium_priority_spawner.must_spawn(app::task_encoder(board_encoder));
+    let medium_priority_spawner = EXECUTOR_MED.start(interrupt::UART5);
+    medium_priority_spawner.must_spawn(app::task_shaft_position(board.ext_i2c, user_config));
 
     let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
     low_priority_executor.run(|low_priority_spawner| {
-        low_priority_spawner.must_spawn(app::task_communication(board_crc));
-        low_priority_spawner.must_spawn(app::task_uart(board_uart));
-        low_priority_spawner.must_spawn(app::task_usb(board_usb, user_config));
+        low_priority_spawner.must_spawn(app::task_communication(board.crc));
+        low_priority_spawner.must_spawn(app::task_uart(board.uart));
+        low_priority_spawner.must_spawn(app::task_usb(board.usb, user_config));
     });
 }

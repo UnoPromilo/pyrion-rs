@@ -1,7 +1,7 @@
 #![no_std]
 use embassy_stm32::time::{Hertz, khz, mhz};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct UserConfig {
     pub device_name: &'static str,
     pub pwm_frequency: Hertz,
@@ -11,6 +11,14 @@ pub struct UserConfig {
     pub external_spi_frequency: Hertz,
     pub can_bitrate: u32,
     pub fd_can_bitrate: u32,
+    pub shaft_position_detector: ShaftPositionDetector,
+}
+
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ShaftPositionDetector {
+    None, // TODO is it valid?
+    AS5600,
 }
 
 impl Default for UserConfig {
@@ -25,6 +33,7 @@ impl Default for UserConfig {
             external_spi_frequency: mhz(1),
             can_bitrate: 250_000,
             fd_can_bitrate: 250_000,
+            shaft_position_detector: ShaftPositionDetector::AS5600,
         }
     }
 }

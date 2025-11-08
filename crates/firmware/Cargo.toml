@@ -35,4 +35,4 @@ inverter = { path = "../drivers/inverter", features = ["defmt"] }
 logging = { path = "../utils/logging", features = ["freq-meter"] }
 transport = { path = "../transport", features = ["defmt"] }
 communication = { path = "../communication", features = ["defmt"] }
-user-config = { path = "../user_config" }
+user-config = { path = "../user_config", features = ["defmt"] }
