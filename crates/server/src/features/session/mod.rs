@@ -2,4 +2,4 @@ mod codec;
 pub mod error;
 mod handle;
 
-pub use handle::{DeviceHandle, DeviceHandleWrapper};
+pub use handle::{DeviceHandle, DeviceHandleWrapper, DeviceReaderWrapper, DeviceWriterWrapper};

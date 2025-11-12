@@ -12,10 +12,11 @@ doctest = false
 bench = false
 
 [dependencies]
+embassy-embedded-hal = { version = "0.5.0", features = ["defmt"] }
 embassy-executor = { version = "0.9.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embassy-futures = { version = "0.1.1", features = ["defmt"] }
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
-embassy-stm32 = { version = "0.4.0", features = ["defmt", "time", "time-driver-any", "stm32g474re", "dual-bank", "memory-x", "unstable-pac", "exti"] }
+embassy-stm32 = { version = "0.4.0", features = ["defmt", "time", "time-driver-any", "stm32g474re", "dual-bank", "unstable-pac", "exti"] }
 embassy-time = { version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
 embassy-usb = { version = "0.5.1" }
 
@@ -36,3 +37,4 @@ logging = { path = "../utils/logging", features = ["freq-meter", "error-register
 transport = { path = "../transport", features = ["defmt"] }
 communication = { path = "../communication", features = ["defmt"] }
 user-config = { path = "../user_config", features = ["defmt"] }
+update-manager = { path = "../update_manager", features = ["defmt"] }

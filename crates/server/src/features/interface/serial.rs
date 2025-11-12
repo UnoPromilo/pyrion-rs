@@ -25,7 +25,9 @@ impl SerialInterface {
 
         let devices = available
             .iter()
-            .filter(|port| should_show_device(port, self.show_only_usb_devices, self.hide_call_up_devices))
+            .filter(|port| {
+                should_show_device(port, self.show_only_usb_devices, self.hide_call_up_devices)
+            })
             .map(|port| DeviceInfo {
                 address: port.port_name.to_string(),
                 interface: InterfaceKind::Serial,
@@ -52,7 +54,11 @@ fn try_get_name(serial_port_info: &SerialPortInfo) -> Option<String> {
     }
 }
 
-fn should_show_device(port: &SerialPortInfo, show_only_usb_devices: bool, hide_call_up_devices: bool) -> bool {
+fn should_show_device(
+    port: &SerialPortInfo,
+    show_only_usb_devices: bool,
+    hide_call_up_devices: bool,
+) -> bool {
     if show_only_usb_devices && !matches!(port.port_type, SerialPortType::UsbPort(_)) {
         return false;
     }
@@ -162,7 +168,8 @@ mod tests {
                 port_type: case.port_type.clone(),
             };
 
-            let result = should_show_device(&port, case.show_only_usb_devices, case.hide_call_up_devices);
+            let result =
+                should_show_device(&port, case.show_only_usb_devices, case.hide_call_up_devices);
 
             assert_eq!(
                 result, case.expected,

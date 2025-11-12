@@ -263,6 +263,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bootloader"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "embassy-boot-stm32",
+ "embassy-stm32",
+ "embassy-sync",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -304,11 +315,15 @@ version = "0.1.0"
 dependencies = [
  "controller-shared",
  "defmt 1.0.1",
+ "embassy-boot-stm32",
+ "embassy-embedded-hal",
  "embassy-stm32",
+ "embassy-sync",
  "embassy-time",
  "logging",
  "transport",
  "units",
+ "update-manager",
 ]
 
 [[package]]
@@ -323,6 +338,7 @@ dependencies = [
  "embassy-time",
  "logging",
  "transport",
+ "update-manager",
 ]
 
 [[package]]
@@ -568,9 +584,9 @@ dependencies = [
 
 [[package]]
 name = "defmt-rtt"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2cac3b8a5644a9e02b75085ebad3b6deafdbdbdec04bb25086523828aa4dfd1"
+checksum = "93d5a25c99d89c40f5676bec8cefe0614f17f0f40e916f98e345dae941807f9e"
 dependencies = [
  "critical-section",
  "defmt 1.0.1",
@@ -609,6 +625,40 @@ name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+
+[[package]]
+name = "embassy-boot"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21b8138aeafd7dd004d77bbf42a581060a018112ffaa3ffc1996da5d3867f345"
+dependencies = [
+ "defmt 1.0.1",
+ "digest",
+ "embassy-embedded-hal",
+ "embassy-sync",
+ "embedded-storage",
+ "embedded-storage-async",
+ "log",
+ "signature",
+]
+
+[[package]]
+name = "embassy-boot-stm32"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b4816cffa6df235d24a6c87caee5f30e3e746f56ac9ad79f8ffd9001391c7fc"
+dependencies = [
+ "cfg-if",
+ "cortex-m",
+ "cortex-m-rt",
+ "defmt 1.0.1",
+ "embassy-boot",
+ "embassy-stm32",
+ "embassy-sync",
+ "embedded-storage",
+ "embedded-storage-async",
+ "log",
+]
 
 [[package]]
 name = "embassy-embedded-hal"
@@ -738,6 +788,7 @@ dependencies = [
  "embedded-storage",
  "embedded-storage-async",
  "futures-util",
+ "log",
  "nb 1.1.0",
  "proc-macro2",
  "quote",
@@ -1029,6 +1080,7 @@ dependencies = [
  "critical-section",
  "defmt 1.0.1",
  "defmt-rtt",
+ "embassy-embedded-hal",
  "embassy-executor",
  "embassy-futures",
  "embassy-stm32",
@@ -1040,6 +1092,7 @@ dependencies = [
  "panic-probe",
  "static_cell",
  "transport",
+ "update-manager",
  "user-config",
 ]
 
@@ -2196,6 +2249,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "signature"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
+
+[[package]]
 name = "slab"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2647,6 +2706,18 @@ checksum = "cd5cfe7d84f6774726717f358a37f5bca8fca273bed4de40604ad129d1107b49"
 dependencies = [
  "num-traits",
  "typenum",
+]
+
+[[package]]
+name = "update-manager"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "embassy-boot",
+ "embassy-boot-stm32",
+ "embassy-embedded-hal",
+ "embassy-stm32",
+ "embassy-sync",
 ]
 
 [[package]]

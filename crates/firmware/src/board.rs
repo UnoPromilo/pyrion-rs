@@ -2,8 +2,10 @@ use adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
 use adc::trigger_edge::ExtTriggerEdge;
 use adc::{Adc, Continuous, Taken};
 use crc_engine::hardware::HardwareCrcEngine;
+use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::can::{Can, OperatingMode};
+use embassy_stm32::flash::{Blocking, Flash};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::i2c::{I2c, Master};
 use embassy_stm32::mode::Async;
@@ -17,6 +19,8 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::Uart;
 use embassy_stm32::{Peripherals, bind_interrupts, can, i2c, spi};
 use embassy_stm32::{usart, usb};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex;
 use inverter::Inverter;
 use user_config::UserConfig;
 
@@ -45,6 +49,7 @@ pub struct Board<'a> {
     pub adc: BoardAdc<'a>,
     pub can: BoardCan<'a>,
     pub crc: BoardCrc<'a>,
+    pub flash: BoardFlash<'a>,
     pub ext_i2c: BoardI2c<'a>,
     pub ext_spi: BoardSpi<'a>,
     pub inverter: BoardInverter<'a>,
@@ -71,6 +76,7 @@ pub struct BoardAdc<'a> {
 }
 pub type BoardCan<'a> = Can<'a>;
 pub type BoardCrc<'a> = HardwareCrcEngine<'a>;
+pub type BoardFlash<'a> = Mutex<NoopRawMutex, BlockingAsync<Flash<'a, Blocking>>>;
 pub type BoardI2c<'a> = I2c<'a, Async, Master>;
 pub type BoardInverter<'a> = Inverter<'a, TIM1>;
 pub struct BoardLeds<'a> {
@@ -280,10 +286,13 @@ impl Board<'static> {
             red: Output::new(peripherals.PB7, Level::Low, Speed::Low),
         };
 
+        let flash = Mutex::new(BlockingAsync::new(Flash::new_blocking(peripherals.FLASH)));
+
         Ok(Self {
             adc,
             can,
             crc,
+            flash,
             inverter,
             leds,
             ext_i2c,

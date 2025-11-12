@@ -56,7 +56,7 @@ fn main() -> ! {
 
     let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
     low_priority_executor.run(|low_priority_spawner| {
-        low_priority_spawner.must_spawn(app::task_communication(board.crc));
+        low_priority_spawner.must_spawn(app::task_communication(board.crc, board.flash));
         low_priority_spawner.must_spawn(app::task_uart(board.uart));
         low_priority_spawner.must_spawn(app::task_usb(board.usb, user_config));
     });

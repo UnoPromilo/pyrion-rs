@@ -18,6 +18,7 @@ use crate::proto::pyrion::v1::controller_message::ControllerMessage;
 use crate::proto::pyrion::v1::device_message::{DeviceIntroduction, DeviceMessage, Telemetry};
 pub use pyrion_v1::session::device_session_server::DeviceSessionServer;
 use transport::Command;
+use transport::command::{FIRMWARE_BLOCK_MAX_DATA_SIZE, FirmwareBlock};
 
 #[derive(Debug)]
 pub struct DeviceSessionService {
@@ -108,13 +109,20 @@ impl pyrion_v1::session::device_session_server::DeviceSession for DeviceSessionS
                         match next {
                             Some(Ok(controller_message)) => {
                                 tracing::info!("Received controller message: {:?}", controller_message);
-                                if let Some(command) = map_proto_to_command(controller_message) {
-                                    if let Err(error) = writer.write(command).await {
-                                        tracing::error!("Error writing command: {:?}", error);
-                                        break;
+                                match map_proto_to_command(controller_message) {
+                                    Ok(command) => {
+                                        if let Err(error) = writer.write(command).await {
+                                            tracing::error!("Error writing command: {:?}", error);
+                                            break;
+                                        }
+                                    },
+                                    Err(CommandMappingError::InvalidPayload) => {
+                                        tracing::warn!("Received command has an invalid payload");
+
+                                    },
+                                    Err(CommandMappingError::NoPayload) => {
+                                        tracing::warn!("Received invalid command, payload was empty");
                                     }
-                                } else {
-                                    tracing::warn!("Received invalid command, payload was empty");
                                 }
                             }
                             Some(Err(error)) => {
@@ -199,18 +207,56 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
                 resolved_errors: telemetry.resolved_errors,
             })),
         },
+        Event::Success => DeviceMessage {
+            payload: Some(DeviceMessagePayload::Success(
+                crate::proto::pyrion::v1::device_message::Success {},
+            )),
+        },
+        Event::Failure => DeviceMessage {
+            payload: Some(DeviceMessagePayload::Failure(
+                crate::proto::pyrion::v1::device_message::Failure {},
+            )),
+        },
     }
 }
 
-fn map_proto_to_command(message: ControllerMessage) -> Option<Command> {
-    message.payload.map(|payload| match payload {
-        ControllerMessagePayload::IntroduceYourself(_) => Command::IntroduceYourself,
-        ControllerMessagePayload::Stop(_) => Command::Stop,
-    })
+fn map_proto_to_command(message: ControllerMessage) -> Result<Command, CommandMappingError> {
+    message
+        .payload
+        .map(|payload| match payload {
+            ControllerMessagePayload::IntroduceYourself(_) => Ok(Command::IntroduceYourself),
+            ControllerMessagePayload::Stop(_) => Ok(Command::Stop),
+            ControllerMessagePayload::WriteFirmwareBlock(write_firmware_block) => {
+                let mut data = [0; FIRMWARE_BLOCK_MAX_DATA_SIZE];
+                let converted_bytes: Vec<u8> = write_firmware_block
+                    .data
+                    .iter()
+                    .flat_map(|&x| x.to_le_bytes())
+                    .collect::<Vec<_>>();
+                if converted_bytes.len() > FIRMWARE_BLOCK_MAX_DATA_SIZE {
+                    return Err(CommandMappingError::InvalidPayload);
+                }
+                data.copy_from_slice(converted_bytes.as_slice());
+                Ok(Command::WriteFirmwareBlock(FirmwareBlock {
+                    offset: write_firmware_block.offset,
+                    length: write_firmware_block.data.len() as u32 * 8,
+                    data,
+                }))
+            }
+            ControllerMessagePayload::FinalizeFirmwareUpdate(_) => {
+                Ok(Command::FinalizeFirmwareUpdate)
+            }
+        })
+        .ok_or(CommandMappingError::NoPayload)?
 }
 
 fn map_uid_to_uuid(uid: &[u8]) -> Uuid {
     let mut bytes = [0u8; 16];
     bytes[..12].copy_from_slice(uid);
     Uuid::from_bytes(bytes)
+}
+
+enum CommandMappingError {
+    NoPayload,
+    InvalidPayload,
 }

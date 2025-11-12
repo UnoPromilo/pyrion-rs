@@ -1,4 +1,6 @@
+use crate::helpers::{decode_f32, decode_u32, decode_u64};
 use crate::packet::Packet;
+use core::array::TryFromSliceError;
 
 pub mod decoder;
 pub mod encoder;
@@ -7,6 +9,8 @@ pub mod encoder;
 pub enum Event {
     DeviceIntroduction(DeviceIntroduction), // 0x01
     Telemetry(Telemetry),                   // 0x02
+    Success,                                // 0x03
+    Failure,                                // 0x04
 }
 
 impl Packet for Event {
@@ -23,6 +27,8 @@ impl Packet for Event {
                 let telemetry = Telemetry::deserialize(&data[1..])?;
                 Ok(Event::Telemetry(telemetry))
             }
+            0x03 => Ok(Event::Success),
+            0x04 => Ok(Event::Failure),
             _ => Err(Error::EventNotFound),
         }
     }
@@ -38,6 +44,14 @@ impl Packet for Event {
                 buffer[0] = 0x02;
                 let content_len = telemetry.serialize(&mut buffer[1..]);
                 1 + content_len
+            }
+            Event::Success => {
+                buffer[0] = 0x03;
+                1
+            }
+            Event::Failure => {
+                buffer[0] = 0x04;
+                1
             }
         }
     }
@@ -126,22 +140,10 @@ pub enum Error {
     InvalidContent,
 }
 
-fn decode_f32(data: &[u8]) -> Result<f32, Error> {
-    data.try_into()
-        .map(f32::from_le_bytes)
-        .map_err(|_| Error::InvalidContent)
-}
-
-fn decode_u64(data: &[u8]) -> Result<u64, Error> {
-    data.try_into()
-        .map(u64::from_le_bytes)
-        .map_err(|_| Error::InvalidContent)
-}
-
-fn decode_u32(data: &[u8]) -> Result<u32, Error> {
-    data.try_into()
-        .map(u32::from_le_bytes)
-        .map_err(|_| Error::InvalidContent)
+impl From<TryFromSliceError> for Error {
+    fn from(_: TryFromSliceError) -> Self {
+        Error::InvalidContent
+    }
 }
 
 #[cfg(test)]
@@ -180,5 +182,22 @@ mod tests {
         assert_eq!(length, 15);
         let deserialized = DeviceIntroduction::deserialize(&buffer[..length]).unwrap();
         assert_eq!(deserialized, device_introduction);
+    }
+
+    #[test]
+    pub fn success_event() {
+        let mut buffer = [0; 100];
+        let len = Event::Success.serialize(&mut buffer);
+        let result = Event::deserialize(&buffer[..len]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    pub fn failure_event() {
+        let mut buffer = [0; 100];
+        let len = Event::Failure.serialize(&mut buffer);
+        let result = Event::deserialize(&buffer[..len]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Event::Failure);
     }
 }

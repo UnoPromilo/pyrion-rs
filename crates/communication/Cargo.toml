@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-defmt = ["dep:defmt", "logging/defmt", "transport/defmt", "embassy-sync/defmt", "command-handler/defmt", "crc-engine/defmt"]
-log = ["logging/log", "embassy-sync/log", "command-handler/log"]
+defmt = ["dep:defmt", "logging/defmt", "transport/defmt", "embassy-sync/defmt", "command-handler/defmt", "crc-engine/defmt", "update-manager/defmt"]
+log = ["logging/log", "embassy-sync/log", "command-handler/log", "update-manager/log"]
 
 [dependencies]
 command-handler = { path = "../command_handler" }
@@ -17,3 +17,4 @@ embassy-time = { version = "0.5.0", default-features = false }
 defmt = { version = "1.0.1", optional = true }
 logging = { path = "../utils/logging" }
 transport = { path = "../transport" }
+update-manager = { path = "../update_manager" }

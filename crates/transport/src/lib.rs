@@ -5,6 +5,7 @@ pub mod command;
 pub mod decoder;
 pub mod encoder;
 pub mod event;
+pub(crate) mod helpers;
 mod packet;
 
 pub use command::Command;

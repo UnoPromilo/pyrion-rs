@@ -1,0 +1,18 @@
+[package]
+name = "bootloader"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "bootloader"
+path = "src/main.rs"
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+embassy-stm32 = { version = "0.4.0", features = ["stm32g474re", "dual-bank"] }
+embassy-boot-stm32 = { version = "0.6.0" }
+cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
+embassy-sync = { version = "0.7.2" }
+cortex-m-rt = { version = "0.7" }
