@@ -54,19 +54,21 @@ information.
   cargo install probe-rs-tools
   ```
 
-### Building and Flashing
+### Flashing
 
-1. Navigate to the firmware crate:
+1. Build and flash the bootloader:
+    ```bash
+    cargo flash --manifest-path crates/bootloader/Cargo.toml --release --chip STM32G474RE --target thumbv7em-none-eabihf
+    ```
+
+2. Build and flash the firmware:
    ```bash
-   cd crates/firmware
+   cargo flash --manifest-path crates/firmware/Cargo.toml --release --chip STM32G474RE --target thumbv7em-none-eabihf
    ```
 
-2. Build and flash the firmware to your STM32G4 board:
-   ```bash
-   cargo run --release
-   ```
-
-The firmware's `.cargo/config.toml` is configured to automatically use `probe-rs` as the runner.
+Alternatively you can navigate to bootloader/firmware crates' folders and use `cargo run --release`.
+The firmware's and bootloader's `.cargo/config.toml` is configured to automatically use `probe-rs` with correct chip and
+target as the runner.
 
 ---
 
