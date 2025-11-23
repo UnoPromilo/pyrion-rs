@@ -9,17 +9,21 @@ pub use uom::fmt::DisplayStyle;
 pub use uom::si;
 use uom::si::electric_current::ampere;
 use uom::si::electric_potential::volt;
+pub use uom::si::f32::AngularVelocity;
+pub use uom::si::f32::Ratio;
 pub use uom::si::f32::*;
 use uom::si::thermodynamic_temperature::kelvin;
 
-pub trait AtomicUnitType {
+pub type DutyCycle = Ratio;
+
+pub trait F32UnitType {
     fn from_f32(value: f32) -> Self;
     fn into_f32(self) -> f32;
 }
 
 macro_rules! impl_atomic_unit_type {
     ($ty:ty, $unit:ty) => {
-        impl AtomicUnitType for $ty {
+        impl F32UnitType for $ty {
             fn from_f32(value: f32) -> Self {
                 Self::new::<$unit>(value)
             }
@@ -35,12 +39,12 @@ impl_atomic_unit_type!(ElectricPotential, volt);
 impl_atomic_unit_type!(ElectricCurrent, ampere);
 impl_atomic_unit_type!(ThermodynamicTemperature, kelvin);
 
-pub struct AtomicUnit<T: AtomicUnitType> {
+pub struct AtomicUnit<T: F32UnitType> {
     value: AtomicF32,
     _marker: PhantomData<T>,
 }
 
-impl<T: AtomicUnitType> AtomicUnit<T> {
+impl<T: F32UnitType> AtomicUnit<T> {
     pub fn new(value: T) -> Self {
         Self {
             value: AtomicF32::new(value.into_f32()),

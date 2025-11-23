@@ -1,9 +1,8 @@
 use crate::converters::{
-    ConfigValues, convert_to_current, convert_to_temperature, convert_to_voltage,
+    convert_to_current, convert_to_temperature, convert_to_voltage, ConfigValues,
 };
 use crate::io::{RawInverterValues, RawSnapshot};
 use core::sync::atomic::Ordering;
-use foc::snapshot::ControlSnapshot;
 use units::{ElectricCurrent, ElectricPotential, ThermodynamicTemperature};
 
 pub fn control_step(raw_snapshot: &Option<RawSnapshot>) -> Option<RawInverterValues> {
@@ -17,19 +16,18 @@ pub fn control_step(raw_snapshot: &Option<RawSnapshot>) -> Option<RawInverterVal
             let cpu_temp = convert_to_temperature(values.temp_cpu, values.v_ref);
 
             store_in_state(i_u, i_v, i_w, bus_voltage, cpu_temp);
-            Some(ControlSnapshot {
-                phase_current: [i_u, i_v, i_w],
-                bus_voltage,
-            })
+            Some(
+                /*FocInput {
+                    phase_current: [i_u, i_v, i_w],
+                    bus_voltage,
+                }*/
+                (),
+            )
         }
         None => None,
     };
 
-    Some(RawInverterValues {
-        u: 140,
-        v: 0,
-        w: 0,
-    })
+    Some(RawInverterValues { u: 140, v: 0, w: 0 })
 }
 
 pub fn store_in_state(

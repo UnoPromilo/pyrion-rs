@@ -10,3 +10,4 @@ defmt = ["dep:defmt"]
 [dependencies]
 defmt = {version = "1.0.1", optional = true}
 units = {path = "../../utils/units"}
+pid = {path = "../../utils/pid"}
