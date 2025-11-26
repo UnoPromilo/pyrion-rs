@@ -4,5 +4,7 @@ mod converters;
 mod core;
 mod io;
 pub mod state;
-pub use core::control_step;
+pub mod strategy;
+pub use core::{control_step, update_strategy};
 pub use io::*;
+pub mod command;

@@ -1,12 +1,15 @@
+use controller_shared::command::{ControlCommand, ControlCommandChannel};
 use core::sync::atomic::Ordering;
 use logging::info;
 use transport::event::DeviceIntroduction;
 use transport::{Command, Event};
 use update_manager::FirmwareUpdateManager;
 
+// TODO decide if should return Option<Event> or just Event
 pub async fn execute_command(
     command: Command,
     update_manager: &mut FirmwareUpdateManager<'_>,
+    control_command_channel: &ControlCommandChannel,
 ) -> Option<Event> {
     info!("Command received: {:?}", command);
     match command {
@@ -20,10 +23,10 @@ pub async fn execute_command(
                 firmware_version: [version_major, version_minor, version_patch],
             }))
         }
-        Command::Stop => {
-            // TODO stop
-            None
-        }
+        Command::Stop => match control_command_channel.try_send(ControlCommand::DisableMotor) {
+            Ok(_) => Some(Event::Success),
+            Err(_) => Some(Event::Failure),
+        },
         Command::WriteFirmwareBlock(block) => {
             match update_manager
                 .write_block(block.slice(), block.offset as usize)

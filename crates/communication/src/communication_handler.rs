@@ -2,6 +2,7 @@ use crate::channel_types::{CommandChannel, EventChannel};
 use crate::packet::{Interface, Packet, split_into_packets};
 use command_handler::handler::execute_command;
 use command_handler::telemetry::get_telemetry;
+use controller_shared::command::ControlCommandChannel;
 use crc_engine::CrcEngine;
 use embassy_futures::select::{Either, select};
 use embassy_sync::pubsub::PubSubBehavior;
@@ -17,6 +18,7 @@ use update_manager::FirmwareUpdateManager;
 pub async fn run(
     command_channel: &'static CommandChannel,
     event_channel: &'static EventChannel,
+    control_command_channel: &'static ControlCommandChannel,
     crc: &mut impl CrcEngine,
     update_manager: &mut FirmwareUpdateManager<'_>,
 ) {
@@ -41,6 +43,7 @@ pub async fn run(
                     &mut encoding_buffer,
                     &incoming_packet,
                     update_manager,
+                    control_command_channel,
                 )
                 .await;
             }
@@ -58,6 +61,7 @@ async fn handle_incoming_packet(
     encoding_buffer: &mut [u8],
     incoming_packet: &Packet,
     update_manager: &mut FirmwareUpdateManager<'_>,
+    control_command_channel: &ControlCommandChannel,
 ) {
     let decoder = match &incoming_packet.interface {
         Some(Interface::Serial) => serial_decoder,
@@ -72,7 +76,7 @@ async fn handle_incoming_packet(
     for &byte in &incoming_packet.buffer[..incoming_packet.length] {
         match decoder.feed(byte, crc) {
             Some(Ok(command)) => {
-                let event = execute_command(command, update_manager).await;
+                let event = execute_command(command, update_manager, control_command_channel).await;
                 if let Some(event) = event {
                     let length = encoder.encode(&event, encoding_buffer, crc);
                     for packet in

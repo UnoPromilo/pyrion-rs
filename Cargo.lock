@@ -331,6 +331,7 @@ name = "communication"
 version = "0.1.0"
 dependencies = [
  "command-handler",
+ "controller-shared",
  "crc-engine",
  "defmt 1.0.1",
  "embassy-futures",

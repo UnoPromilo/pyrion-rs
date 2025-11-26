@@ -1,7 +1,5 @@
 use units::{Angle, DutyCycle, ElectricCurrent, ElectricPotential};
 pub struct FocInput {
-    pub d_requested: ElectricCurrent,
-    pub q_requested: ElectricCurrent,
     pub v_bus: ElectricPotential,
     pub angle: AngleSnapshot,
     pub u: ElectricCurrent,

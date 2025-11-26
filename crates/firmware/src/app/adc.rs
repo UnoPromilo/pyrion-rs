@@ -1,12 +1,17 @@
 use crate::board::{BoardAdc, BoardInverter};
-use controller_shared::{RawSnapshot, control_step};
+use controller_shared::strategy::ControlStrategy;
+use controller_shared::{control_step, update_strategy, RawSnapshot};
 use core::sync::atomic::Ordering;
 use embassy_futures::join::join5;
-use embassy_time::{Duration, Instant, with_timeout};
+use embassy_time::{with_timeout, Duration, Instant};
 use logging::FreqMeter;
+use crate::app::communication::CONTROL_COMMAND_CHANNEL;
 
 #[embassy_executor::task]
-pub async fn task_adc(adc: BoardAdc<'static>, mut inverter: BoardInverter<'static>) {
+pub async fn task_adc(
+    adc: BoardAdc<'static>,
+    mut inverter: BoardInverter<'static>,
+) {
     let adc_1 = adc.adc1_running;
     let adc_2 = adc.adc2_running;
     let adc_3 = adc.adc3_running;
@@ -15,8 +20,11 @@ pub async fn task_adc(adc: BoardAdc<'static>, mut inverter: BoardInverter<'stati
     let mut inverter_enabled = false;
     let max_duty = inverter.get_max_duty();
     let controller_state = controller_shared::state::state();
+
     let mut freq_meter = FreqMeter::named("ADC");
     freq_meter.link(&controller_state.foc_loop_frequency);
+
+    let mut strategy = ControlStrategy::Disabled;
 
     loop {
         let result = with_timeout(
@@ -56,10 +64,12 @@ pub async fn task_adc(adc: BoardAdc<'static>, mut inverter: BoardInverter<'stati
             Err(_) => None,
         };
 
-        let pwm = control_step(&raw_reading);
+        strategy = update_strategy(&CONTROL_COMMAND_CHANNEL, strategy);
+        let pwm = control_step(&raw_reading, &mut strategy);
 
         match pwm {
             Some(values) => {
+                // TODO is it better to run if check or always enable/disable mosfets?
                 if inverter_enabled == false {
                     inverter_enabled = true;
                     inverter.enable();

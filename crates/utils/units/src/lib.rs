@@ -6,6 +6,7 @@ use core::marker::PhantomData;
 use core::sync::atomic::Ordering;
 use portable_atomic::AtomicF32;
 pub use uom::fmt::DisplayStyle;
+use uom::num::Float;
 pub use uom::si;
 use uom::si::electric_current::ampere;
 use uom::si::electric_potential::volt;
@@ -65,6 +66,18 @@ impl<T: F32UnitType> AtomicUnit<T> {
 
     pub fn load(&self, ordering: Ordering) -> T {
         T::from_f32(self.value.load(ordering))
+    }
+}
+
+pub trait IntoRawDutyCycle {
+    fn into_raw_duty_cycle(self, max: u16) -> u16;
+}
+
+impl IntoRawDutyCycle for DutyCycle {
+    #[inline(always)]
+    fn into_raw_duty_cycle(self, max: u16) -> u16 {
+        let max_f = max as f32;
+        (self.value * max_f).clamp(0f32, max_f).round() as u16
     }
 }
 
