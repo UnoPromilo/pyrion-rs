@@ -14,16 +14,16 @@ pub static EVENT_CHANNEL: EventChannel = PubSubChannel::new();
 pub static CONTROL_COMMAND_CHANNEL: ControlCommandChannel = ControlCommandChannel::new();
 
 #[embassy_executor::task]
-pub async fn task_communication(mut crc: BoardCrc<'static>, flash: BoardFlash<'static>) {
-    let flash = FLASH.init(flash);
+pub async fn task_communication(mut crc: BoardCrc<'static>, /*flash: BoardFlash<'static>*/) {
+    //let flash = FLASH.init(flash);
     let fw_buffer = FW_BUFFER.init(new_fw_buffer());
-    let mut update_manager = FirmwareUpdateManager::new(flash, fw_buffer);
+    //let mut update_manager = FirmwareUpdateManager::new(flash, fw_buffer);
     communication::run(
         &COMMAND_CHANNEL,
         &EVENT_CHANNEL,
         &CONTROL_COMMAND_CHANNEL,
         &mut crc,
-        &mut update_manager,
+        //&mut update_manager,
     )
     .await;
 }

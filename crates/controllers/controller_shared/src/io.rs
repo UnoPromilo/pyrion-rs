@@ -18,7 +18,7 @@ pub struct RawSnapshot {
 
     pub analog_input: u16,
 
-    pub max_duty: u16,
+    pub max_duty: u32,
 
     pub angle: u16,
 }
@@ -26,7 +26,7 @@ pub struct RawSnapshot {
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RawInverterValues {
-    pub u: u16,
-    pub v: u16,
-    pub w: u16,
+    pub u: u32,
+    pub v: u32,
+    pub w: u32,
 }

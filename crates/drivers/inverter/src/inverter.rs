@@ -10,7 +10,7 @@ use embassy_stm32::{Peri, pac};
 use logging::debug;
 use stm32_metapac::timer::vals::Mms;
 
-const TRGO_OFFSET: u16 = 2;
+const TRGO_OFFSET: u32 = 2;
 
 pub struct Inverter<'a, T: AdvancedInstance4Channel> {
     pwm: ComplementaryPwm<'a, T>,
@@ -81,13 +81,13 @@ impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
         self.pwm.set_dead_time(dead_time);
     }
 
-    pub fn set_phase_duties(&mut self, u: u16, v: u16, w: u16) {
+    pub fn set_phase_duties(&mut self, u: u32, v: u32, w: u32) {
         self.pwm.set_duty(Channel::Ch1, u);
         self.pwm.set_duty(Channel::Ch2, v);
         self.pwm.set_duty(Channel::Ch3, w);
     }
 
-    pub fn get_max_duty(&self) -> u16 {
+    pub fn get_max_duty(&self) -> u32 {
         self.pwm.get_max_duty()
     }
 

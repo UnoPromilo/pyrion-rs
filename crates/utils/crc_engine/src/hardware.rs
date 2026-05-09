@@ -26,7 +26,8 @@ impl<'a> HardwareCrcEngine<'a> {
 impl<'a> CrcEngine for HardwareCrcEngine<'a> {
     fn calculate(&mut self, data: &[u8]) -> u16 {
         self.crc.reset();
-        let value = self.crc.feed_bytes(data);
+        self.crc.feed_bytes(data);
+        let value = self.crc.read();
         (value & 0xFFFF) as u16
     }
 }

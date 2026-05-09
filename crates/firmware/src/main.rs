@@ -2,11 +2,14 @@
 #![no_main]
 #![allow(clippy::bool_comparison)]
 
+use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 use crate::version::populate_version;
 use cortex_m_rt::entry;
+use defmt::info;
 use embassy_executor::{Executor, InterruptExecutor};
 use embassy_stm32::interrupt;
 use embassy_stm32::interrupt::{InterruptExt, Priority};
+use embassy_time::Delay;
 use static_cell::StaticCell;
 use user_config::UserConfig;
 
@@ -48,16 +51,16 @@ fn main() -> ! {
 
     interrupt::UART4.set_priority(Priority::P6);
     let high_priority_spawner = EXECUTOR_HIGH.start(interrupt::UART4);
-    high_priority_spawner.must_spawn(app::task_adc(board.adc, board.inverter));
+    high_priority_spawner.spawn(app::task_adc(board.adc, board.inverter).unwrap());
 
     interrupt::UART5.set_priority(Priority::P7);
     let medium_priority_spawner = EXECUTOR_MED.start(interrupt::UART5);
-    medium_priority_spawner.must_spawn(app::task_shaft_position(board.ext_i2c, user_config));
+    medium_priority_spawner.spawn(app::task_shaft_position(board.ext_i2c, user_config).unwrap());
 
     let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
     low_priority_executor.run(|low_priority_spawner| {
-        low_priority_spawner.must_spawn(app::task_communication(board.crc, board.flash));
-        low_priority_spawner.must_spawn(app::task_uart(board.uart));
-        low_priority_spawner.must_spawn(app::task_usb(board.usb, user_config));
+        low_priority_spawner.spawn(app::task_communication(board.crc).unwrap());
+        low_priority_spawner.spawn(app::task_uart(board.uart).unwrap());
+        low_priority_spawner.spawn(app::task_usb(board.usb, user_config, board.flash).unwrap());
     });
 }

@@ -7,15 +7,15 @@ use embassy_stm32::interrupt::typelevel::Interrupt;
 use logging::trace;
 use stm32_metapac::adc::vals::SampleTime;
 
-pub struct Running<I: AdcInstance, C, const CHANNELS: usize> {
+pub struct Running<'a, I: AdcInstance, C, const CHANNELS: usize> {
     configured: Configured<I, C>,
-    channels: [AnyAdcChannel<I>; CHANNELS],
+    channels: [AnyAdcChannel<'a, I>; CHANNELS],
 }
 
-impl<I: AdcInstance, const CHANNELS: usize> Running<I, Single, CHANNELS> {
+impl<'a, I: AdcInstance, const CHANNELS: usize> Running<'a, I, Single, CHANNELS> {
     pub(crate) fn new(
         configured: Configured<I, Single>,
-        sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
+        sequence: [(AnyAdcChannel<'a, I>, SampleTime); CHANNELS],
     ) -> Self {
         Self::inner_new(configured, sequence)
     }
@@ -31,10 +31,10 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Single, CHANNELS> {
     }
 }
 
-impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
+impl<'a, I: AdcInstance, const CHANNELS: usize> Running<'a, I, Continuous, CHANNELS> {
     pub(crate) fn new(
         configured: Configured<I, Continuous>,
-        sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
+        sequence: [(AnyAdcChannel<'a, I>, SampleTime); CHANNELS],
     ) -> Self {
         let instance = Self::inner_new(configured, sequence);
         if !I::regs().cfgr().read().jauto() {
@@ -63,10 +63,10 @@ impl<I: AdcInstance, const CHANNELS: usize> Running<I, Continuous, CHANNELS> {
     }
 }
 
-impl<I: AdcInstance, C, const CHANNELS: usize> Running<I, C, CHANNELS> {
+impl<'a, I: AdcInstance, C, const CHANNELS: usize> Running<'a, I, C, CHANNELS> {
     fn inner_new(
         configured: Configured<I, C>,
-        sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
+        sequence: [(AnyAdcChannel<'a, I>, SampleTime); CHANNELS],
     ) -> Self {
         I::set_length(CHANNELS as u8 - 1);
         for (index, (channel, sample_time)) in sequence.iter().enumerate() {
@@ -90,7 +90,7 @@ impl<I: AdcInstance, C, const CHANNELS: usize> Running<I, C, CHANNELS> {
             channels,
         }
     }
-    pub fn release(self) -> (Configured<I, C>, [AnyAdcChannel<I>; CHANNELS]) {
+    pub fn release(self) -> (Configured<I, C>, [AnyAdcChannel<'a, I>; CHANNELS]) {
         I::stop();
         I::set_end_of_conversion_signal(EndOfConversionSignal::None);
         (self.configured, self.channels)

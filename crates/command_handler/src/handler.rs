@@ -8,7 +8,7 @@ use update_manager::FirmwareUpdateManager;
 // TODO decide if should return Option<Event> or just Event
 pub async fn execute_command(
     command: Command,
-    update_manager: &mut FirmwareUpdateManager<'_>,
+    //update_manager: &mut FirmwareUpdateManager<'_>,
     control_command_channel: &ControlCommandChannel,
 ) -> Option<Event> {
     info!("Command received: {:?}", command);
@@ -19,7 +19,7 @@ pub async fn execute_command(
             let version_minor = state.version.minor.load(Ordering::Relaxed);
             let version_patch = state.version.patch.load(Ordering::Relaxed);
             Some(Event::DeviceIntroduction(DeviceIntroduction {
-                uid: *embassy_stm32::uid::uid(),
+                uid: embassy_stm32::uid::uid(),
                 firmware_version: [version_major, version_minor, version_patch],
             }))
         }
@@ -28,18 +28,23 @@ pub async fn execute_command(
             Err(_) => Some(Event::Failure),
         },
         Command::WriteFirmwareBlock(block) => {
-            match update_manager
+            /*match update_manager
                 .write_block(block.slice(), block.offset as usize)
                 .await
             {
                 Ok(()) => Some(Event::Success),
                 Err(_) => Some(Event::Failure),
-            }
+            }*/
+            Some(Event::Failure)
         }
-        Command::FinalizeFirmwareUpdate => match update_manager.finish_update().await {
-            // OK is never triggered, because a successful firmware update results in a device reset.
-            Ok(()) => Some(Event::Success),
-            Err(_) => Some(Event::Failure),
-        },
+        Command::FinalizeFirmwareUpdate => {
+            /*match update_manager.finish_update().await {
+                // OK is never triggered, because a successful firmware update results in a device reset.
+                Ok(()) => Some(Event::Success),
+                Err(_) => Some(Event::Failure),
+            },*/
+
+            Some(Event::Failure)
+        }
     }
 }

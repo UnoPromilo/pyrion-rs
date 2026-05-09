@@ -7,5 +7,5 @@ edition = "2024"
 defmt = ["dep:defmt"]
 
 [dependencies]
-embassy-stm32 = { version = "0.4.0", features = ["stm32g474re", "time"] }
+embassy-stm32 = { version = "0.6.0", features = ["stm32g474re", "time"] }
 defmt = {version = "1.0.1", optional = true}

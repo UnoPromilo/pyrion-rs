@@ -5,9 +5,7 @@ use crate::state::WithState;
 use crate::trigger_edge::ExtTriggerEdge;
 use crate::{Config, injected};
 use core::marker::PhantomData;
-use embassy_stm32::adc::{
-    Temperature, TemperatureChannel, VBatChannel, Vbat, VrefChannel, VrefInt,
-};
+use embassy_stm32::adc::{Temperature, Vbat, VrefInt};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{Peri, peripherals, rcc};
 use logging::debug;
@@ -166,10 +164,7 @@ impl<'d, T: AdcInstance, R> Adc<'d, T, Free, R> {
 
 // TODO Add implementations for regular conversion
 impl<'d, T: AdcInstance, R, I> Adc<'d, T, I, R> {
-    pub fn enable_vrefint(&self) -> VrefInt
-    where
-        T: VrefChannel,
-    {
+    pub fn enable_vrefint(&self) -> VrefInt {
         if T::is_vrefint_enabled() {
             panic!("Vrefint is already enabled");
         }
@@ -178,10 +173,7 @@ impl<'d, T: AdcInstance, R, I> Adc<'d, T, I, R> {
         VrefInt {}
     }
 
-    pub fn enable_temperature(&self) -> Temperature
-    where
-        T: TemperatureChannel,
-    {
+    pub fn enable_temperature(&self) -> Temperature {
         if T::is_temperature_enabled() {
             panic!("Temperature is already enabled");
         }
@@ -190,10 +182,7 @@ impl<'d, T: AdcInstance, R, I> Adc<'d, T, I, R> {
         Temperature {}
     }
 
-    pub fn enable_vbat(&self) -> Vbat
-    where
-        T: VBatChannel,
-    {
+    pub fn enable_vbat(&self) -> Vbat {
         if T::is_vbat_enabled() {
             panic!("Vbat is already enabled");
         }

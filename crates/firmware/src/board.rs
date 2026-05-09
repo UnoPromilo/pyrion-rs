@@ -1,26 +1,27 @@
 use adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
 use adc::trigger_edge::ExtTriggerEdge;
 use adc::{Adc, Continuous, Taken};
+use core::cell::RefCell;
 use crc_engine::hardware::HardwareCrcEngine;
-use embassy_embedded_hal::adapter::BlockingAsync;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::can::{Can, OperatingMode};
 use embassy_stm32::flash::{Blocking, Flash};
 use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_stm32::i2c::{I2c, Master};
+use embassy_stm32::i2c::I2c;
 use embassy_stm32::mode::Async;
 use embassy_stm32::pac::rcc::vals::Pllq;
 use embassy_stm32::peripherals::{
-    ADC1, ADC2, ADC3, ADC4, ADC5, FDCAN2, I2C3, I2C4, TIM1, USART1, USB,
+    ADC1, ADC2, ADC3, ADC4, ADC5, DMA1_CH1, DMA1_CH2, DMA1_CH3, DMA1_CH4, DMA1_CH5, DMA1_CH6,
+    DMA1_CH7, DMA1_CH8, DMA2_CH1, DMA2_CH2, FDCAN2, I2C3, I2C4, TIM1, USART1, USB,
 };
 use embassy_stm32::rcc::mux::{Clk48sel, Fdcansel};
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
 use embassy_stm32::usart::Uart;
-use embassy_stm32::{Peripherals, bind_interrupts, can, i2c, spi};
+use embassy_stm32::{Peripherals, bind_interrupts, can, dma, i2c, spi};
 use embassy_stm32::{usart, usb};
+use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::mutex::Mutex;
 use inverter::Inverter;
 use user_config::UserConfig;
 
@@ -36,13 +37,24 @@ bind_interrupts!(struct Irqs{
     I2C4_EV => i2c::EventInterruptHandler<I2C4>;
     I2C4_ER => i2c::ErrorInterruptHandler<I2C4>;
 
-
     USART1 => usart::InterruptHandler<USART1>;
 
     USB_LP => usb::InterruptHandler<USB>;
 
     FDCAN2_IT0 => can::IT0InterruptHandler<FDCAN2>;
     FDCAN2_IT1 => can::IT1InterruptHandler<FDCAN2>;
+
+    DMA1_CHANNEL1 => dma::InterruptHandler<DMA1_CH1>;
+    DMA1_CHANNEL2 => dma::InterruptHandler<DMA1_CH2>;
+    DMA1_CHANNEL3 => dma::InterruptHandler<DMA1_CH3>;
+    DMA1_CHANNEL4 => dma::InterruptHandler<DMA1_CH4>;
+    DMA1_CHANNEL5 => dma::InterruptHandler<DMA1_CH5>;
+    DMA1_CHANNEL6 => dma::InterruptHandler<DMA1_CH6>;
+    DMA1_CHANNEL7 => dma::InterruptHandler<DMA1_CH7>;
+    DMA1_CHANNEL8 => dma::InterruptHandler<DMA1_CH8>;
+
+    DMA2_CHANNEL1 => dma::InterruptHandler<DMA2_CH1>;
+    DMA2_CHANNEL2 => dma::InterruptHandler<DMA2_CH2>;
 });
 
 pub struct Board<'a> {
@@ -68,22 +80,22 @@ pub struct BoardAdc<'a> {
     pub _adc4: Adc<'a, ADC4, Taken>,
     pub _adc5: Adc<'a, ADC5, Taken>,
 
-    pub adc1_running: adc::injected::Running<ADC1, Continuous, 3>, // I_U, V_U, Analog_input
-    pub adc2_running: adc::injected::Running<ADC2, Continuous, 3>, // Driver_temp, motor_temp, voltage_sense
-    pub adc3_running: adc::injected::Running<ADC3, Continuous, 2>, // I_V, V_V
-    pub adc4_running: adc::injected::Running<ADC4, Continuous, 1>, // V_Ref
-    pub adc5_running: adc::injected::Running<ADC5, Continuous, 3>, // I_W, V_W, Cpu_temp
+    pub adc1_running: adc::injected::Running<'a, ADC1, Continuous, 3>, // I_U, V_U, Analog_input
+    pub adc2_running: adc::injected::Running<'a, ADC2, Continuous, 3>, // Driver_temp, motor_temp, voltage_sense
+    pub adc3_running: adc::injected::Running<'a, ADC3, Continuous, 2>, // I_V, V_V
+    pub adc4_running: adc::injected::Running<'a, ADC4, Continuous, 1>, // V_Ref
+    pub adc5_running: adc::injected::Running<'a, ADC5, Continuous, 3>, // I_W, V_W, Cpu_temp
 }
 pub type BoardCan<'a> = Can<'a>;
 pub type BoardCrc<'a> = HardwareCrcEngine<'a>;
-pub type BoardFlash<'a> = Mutex<NoopRawMutex, BlockingAsync<Flash<'a, Blocking>>>;
-pub type BoardI2c<'a> = I2c<'a, Async, Master>;
+pub type BoardFlash<'a> = Mutex<NoopRawMutex, RefCell<Flash<'a, Blocking>>>;
+pub type BoardI2c<'a> = I2c<'a, Async, i2c::mode::Master>;
 pub type BoardInverter<'a> = Inverter<'a, TIM1>;
 pub struct BoardLeds<'a> {
     pub green: Output<'a>,
     pub red: Output<'a>,
 }
-pub type BoardSpi<'a> = Spi<'a, Async>;
+pub type BoardSpi<'a> = Spi<'a, Async, spi::mode::Master>;
 pub type BoardUart<'a> = Uart<'a, Async>;
 pub type BoardUsb<'a> = usb::Driver<'a, USB>;
 
@@ -99,9 +111,9 @@ impl Board<'static> {
                 peripherals.I2C3,
                 peripherals.PC8,
                 peripherals.PC9,
-                Irqs,
                 peripherals.DMA1_CH2,
                 peripherals.DMA1_CH3,
+                Irqs,
                 i2c_config,
             )
         };
@@ -116,9 +128,9 @@ impl Board<'static> {
                 peripherals.I2C4,
                 peripherals.PC6,
                 peripherals.PC7,
-                Irqs,
                 peripherals.DMA1_CH4,
                 peripherals.DMA1_CH5,
+                Irqs,
                 i2c_config,
             )
         };
@@ -215,9 +227,9 @@ impl Board<'static> {
                 peripherals.USART1,
                 peripherals.PC5,
                 peripherals.PC4,
-                Irqs,
                 peripherals.DMA1_CH6,
                 peripherals.DMA1_CH7,
+                Irqs,
                 config,
             );
             match uart {
@@ -263,6 +275,7 @@ impl Board<'static> {
                 peripherals.PC11,
                 peripherals.DMA1_CH1,
                 peripherals.DMA1_CH8,
+                Irqs,
                 config,
             )
         };
@@ -277,6 +290,7 @@ impl Board<'static> {
                 peripherals.PA6,
                 peripherals.DMA2_CH1,
                 peripherals.DMA2_CH2,
+                Irqs,
                 config,
             )
         };
@@ -286,7 +300,8 @@ impl Board<'static> {
             red: Output::new(peripherals.PB7, Level::Low, Speed::Low),
         };
 
-        let flash = Mutex::new(BlockingAsync::new(Flash::new_blocking(peripherals.FLASH)));
+        let flash = Flash::new_blocking(peripherals.FLASH);
+        let flash = Mutex::new(RefCell::new(flash));
 
         Ok(Self {
             adc,

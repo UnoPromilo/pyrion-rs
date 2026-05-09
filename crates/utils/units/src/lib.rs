@@ -70,14 +70,14 @@ impl<T: F32UnitType> AtomicUnit<T> {
 }
 
 pub trait IntoRawDutyCycle {
-    fn into_raw_duty_cycle(self, max: u16) -> u16;
+    fn into_raw_duty_cycle(self, max: u32) -> u32;
 }
 
 impl IntoRawDutyCycle for DutyCycle {
     #[inline(always)]
-    fn into_raw_duty_cycle(self, max: u16) -> u16 {
+    fn into_raw_duty_cycle(self, max: u32) -> u32 {
         let max_f = max as f32;
-        (self.value * max_f).clamp(0f32, max_f).round() as u16
+        (self.value * max_f).clamp(0f32, max_f).round() as u32
     }
 }
 
