@@ -14,8 +14,15 @@ bench = false
 embassy-stm32 = { version = "0.6.0", features = ["stm32g474re", "dual-bank"] }
 embassy-boot-stm32 = { version = "0.8.0" }
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
-embassy-sync = { version = "0.8.0" }
+embassy-time = { version = "0.5.0", features = ["tick-hz-32_768", "defmt", "defmt-timestamp-uptime"] }
 cortex-m-rt = { version = "0.7.5" }
-embassy-usb-dfu = { version = "0.3.0", features = ["dfu", "cortex-m"] }
-embassy-usb = { version = "0.6.0", default-features = false }
-embassy-futures = { version = "0.1.2" }
+embassy-usb-dfu = { version = "0.3.0", features = ["dfu", "cortex-m", "defmt"] }
+embassy-usb = { version = "0.6.0", default-features = false, features = ["defmt"]}
+embassy-futures = { version = "0.1.2", default-features = false}
+
+embedded-storage = {version = "0.3.1"}
+
+defmt = "1.0.1"
+defmt-rtt = "1.0.0"
+
+hardware = { path = "../hardware" }

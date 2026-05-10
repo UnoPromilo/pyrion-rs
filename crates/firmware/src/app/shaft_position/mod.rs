@@ -1,4 +1,4 @@
-use crate::board::BoardI2c;
+use hardware::BoardI2c;
 use logging::info;
 use user_config::{ShaftPositionDetector, UserConfig};
 

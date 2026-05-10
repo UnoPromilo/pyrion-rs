@@ -3,7 +3,6 @@ use embassy_stm32::time::{Hertz, khz, mhz};
 
 #[derive(Copy, Clone, Debug)]
 pub struct UserConfig {
-    pub device_name: &'static str,
     pub pwm_frequency: Hertz,
     pub onboard_i2c_frequency: Hertz,
     pub onboard_spi_frequency: Hertz,
@@ -25,7 +24,6 @@ impl Default for UserConfig {
     // TODO load from flash
     fn default() -> Self {
         Self {
-            device_name: "Pyrion V1",
             pwm_frequency: khz(40),
             onboard_i2c_frequency: khz(100),
             onboard_spi_frequency: mhz(1),

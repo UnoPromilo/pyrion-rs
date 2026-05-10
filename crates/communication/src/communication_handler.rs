@@ -13,7 +13,6 @@ use transport::command::Error;
 use transport::command::decoder::Decoder;
 use transport::decoder::DecoderError;
 use transport::event::encoder::Encoder;
-use update_manager::FirmwareUpdateManager;
 
 pub async fn run(
     command_channel: &'static CommandChannel,

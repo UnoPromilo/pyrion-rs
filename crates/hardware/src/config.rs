@@ -1,108 +1,49 @@
+use crate::irqs::Irqs;
+use crate::serial_number::get_serial_number_as_hex;
+#[cfg(feature = "full")]
+use crate::{Board, BoardAdc, BoardLeds};
+#[cfg(not(feature = "full"))]
+use crate::{Board, BoardLeds};
+#[cfg(feature = "full")]
+use adc::Adc;
+#[cfg(feature = "full")]
 use adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
+#[cfg(feature = "full")]
 use adc::trigger_edge::ExtTriggerEdge;
-use adc::{Adc, Continuous, Taken};
 use core::cell::RefCell;
+#[cfg(feature = "full")]
 use crc_engine::hardware::HardwareCrcEngine;
+#[cfg(feature = "full")]
 use embassy_stm32::adc::{AdcChannel, SampleTime};
-use embassy_stm32::can::{Can, OperatingMode};
-use embassy_stm32::flash::{Blocking, Flash};
+#[cfg(feature = "full")]
+use embassy_stm32::can::OperatingMode;
+use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Level, Output, Speed};
+#[cfg(feature = "full")]
 use embassy_stm32::i2c::I2c;
-use embassy_stm32::mode::Async;
 use embassy_stm32::pac::rcc::vals::Pllq;
-use embassy_stm32::peripherals::{
-    ADC1, ADC2, ADC3, ADC4, ADC5, DMA1_CH1, DMA1_CH2, DMA1_CH3, DMA1_CH4, DMA1_CH5, DMA1_CH6,
-    DMA1_CH7, DMA1_CH8, DMA2_CH1, DMA2_CH2, FDCAN2, I2C3, I2C4, TIM1, USART1, USB,
-};
 use embassy_stm32::rcc::mux::{Clk48sel, Fdcansel};
+#[cfg(feature = "full")]
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
+#[cfg(feature = "full")]
 use embassy_stm32::usart::Uart;
-use embassy_stm32::{Peripherals, bind_interrupts, can, dma, i2c, spi};
-use embassy_stm32::{usart, usb};
+#[cfg(feature = "full")]
+use embassy_stm32::{Peripherals, can, i2c, spi, usart, usb};
+#[cfg(not(feature = "full"))]
+use embassy_stm32::{Peripherals, usb};
 use embassy_sync::blocking_mutex::Mutex;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+#[cfg(feature = "full")]
 use inverter::Inverter;
+#[cfg(feature = "full")]
 use user_config::UserConfig;
 
-bind_interrupts!(struct Irqs{
-    ADC1_2 => adc::MultiInterruptHandler<ADC1, ADC2>;
-    ADC3 => adc::SingleInterruptHandler<ADC3>;
-    ADC4 => adc::SingleInterruptHandler<ADC4>;
-    ADC5 => adc::SingleInterruptHandler<ADC5>;
-
-    I2C3_EV => i2c::EventInterruptHandler<I2C3>;
-    I2C3_ER => i2c::ErrorInterruptHandler<I2C3>;
-
-    I2C4_EV => i2c::EventInterruptHandler<I2C4>;
-    I2C4_ER => i2c::ErrorInterruptHandler<I2C4>;
-
-    USART1 => usart::InterruptHandler<USART1>;
-
-    USB_LP => usb::InterruptHandler<USB>;
-
-    FDCAN2_IT0 => can::IT0InterruptHandler<FDCAN2>;
-    FDCAN2_IT1 => can::IT1InterruptHandler<FDCAN2>;
-
-    DMA1_CHANNEL1 => dma::InterruptHandler<DMA1_CH1>;
-    DMA1_CHANNEL2 => dma::InterruptHandler<DMA1_CH2>;
-    DMA1_CHANNEL3 => dma::InterruptHandler<DMA1_CH3>;
-    DMA1_CHANNEL4 => dma::InterruptHandler<DMA1_CH4>;
-    DMA1_CHANNEL5 => dma::InterruptHandler<DMA1_CH5>;
-    DMA1_CHANNEL6 => dma::InterruptHandler<DMA1_CH6>;
-    DMA1_CHANNEL7 => dma::InterruptHandler<DMA1_CH7>;
-    DMA1_CHANNEL8 => dma::InterruptHandler<DMA1_CH8>;
-
-    DMA2_CHANNEL1 => dma::InterruptHandler<DMA2_CH1>;
-    DMA2_CHANNEL2 => dma::InterruptHandler<DMA2_CH2>;
-});
-
-pub struct Board<'a> {
-    pub adc: BoardAdc<'a>,
-    pub can: BoardCan<'a>,
-    pub crc: BoardCrc<'a>,
-    pub flash: BoardFlash<'a>,
-    pub ext_i2c: BoardI2c<'a>,
-    pub ext_spi: BoardSpi<'a>,
-    pub inverter: BoardInverter<'a>,
-    pub leds: BoardLeds<'a>,
-    pub onboard_i2c: BoardI2c<'a>,
-    pub onboard_spi: BoardSpi<'a>,
-    pub uart: BoardUart<'a>,
-    pub usb: BoardUsb<'a>,
-    // hall
-}
-
-pub struct BoardAdc<'a> {
-    pub _adc1: Adc<'a, ADC1, Taken>,
-    pub _adc2: Adc<'a, ADC2, Taken>,
-    pub _adc3: Adc<'a, ADC3, Taken>,
-    pub _adc4: Adc<'a, ADC4, Taken>,
-    pub _adc5: Adc<'a, ADC5, Taken>,
-
-    pub adc1_running: adc::injected::Running<'a, ADC1, Continuous, 3>, // I_U, V_U, Analog_input
-    pub adc2_running: adc::injected::Running<'a, ADC2, Continuous, 3>, // Driver_temp, motor_temp, voltage_sense
-    pub adc3_running: adc::injected::Running<'a, ADC3, Continuous, 2>, // I_V, V_V
-    pub adc4_running: adc::injected::Running<'a, ADC4, Continuous, 1>, // V_Ref
-    pub adc5_running: adc::injected::Running<'a, ADC5, Continuous, 3>, // I_W, V_W, Cpu_temp
-}
-pub type BoardCan<'a> = Can<'a>;
-pub type BoardCrc<'a> = HardwareCrcEngine<'a>;
-pub type BoardFlash<'a> = Mutex<NoopRawMutex, RefCell<Flash<'a, Blocking>>>;
-pub type BoardI2c<'a> = I2c<'a, Async, i2c::mode::Master>;
-pub type BoardInverter<'a> = Inverter<'a, TIM1>;
-pub struct BoardLeds<'a> {
-    pub green: Output<'a>,
-    pub red: Output<'a>,
-}
-pub type BoardSpi<'a> = Spi<'a, Async, spi::mode::Master>;
-pub type BoardUart<'a> = Uart<'a, Async>;
-pub type BoardUsb<'a> = usb::Driver<'a, USB>;
-
 impl Board<'static> {
-    pub fn init(user_config: &UserConfig) -> Result<Self, Error> {
+    pub fn init(#[cfg(feature = "full")] user_config: &UserConfig) -> Self {
         let peripherals = Self::configure_mcu();
+        #[cfg(feature = "full")]
         let crc = HardwareCrcEngine::new(peripherals.CRC);
+        #[cfg(feature = "full")]
         let onboard_i2c = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
@@ -118,6 +59,7 @@ impl Board<'static> {
             )
         };
 
+        #[cfg(feature = "full")]
         let ext_i2c = {
             let mut i2c_config = i2c::Config::default();
             i2c_config.gpio_speed = Speed::VeryHigh;
@@ -135,6 +77,7 @@ impl Board<'static> {
             )
         };
 
+        #[cfg(feature = "full")]
         let adc = {
             let adc_config = adc::Config::default();
             let adc1 = Adc::new(peripherals.ADC1, adc_config);
@@ -221,6 +164,7 @@ impl Board<'static> {
             }
         };
 
+        #[cfg(feature = "full")]
         let uart = {
             let config = usart::Config::default();
             let uart = Uart::new(
@@ -234,10 +178,11 @@ impl Board<'static> {
             );
             match uart {
                 Ok(uart) => uart,
-                Err(e) => panic!("uart initialization error: {:?}", e),
+                Err(e) => core::panic!("uart initialization error: {:?}", e),
             }
         };
 
+        #[cfg(feature = "full")]
         let inverter = Inverter::new(
             peripherals.TIM1,
             peripherals.PC0,
@@ -250,6 +195,8 @@ impl Board<'static> {
         );
 
         let usb = usb::Driver::new(peripherals.USB, Irqs, peripherals.PA12, peripherals.PA11);
+
+        #[cfg(feature = "full")]
         let can = {
             let mut can = can::CanConfigurator::new(
                 peripherals.FDCAN2,
@@ -265,6 +212,8 @@ impl Board<'static> {
             can.set_fd_data_bitrate(user_config.fd_can_bitrate, false);
             can.start(OperatingMode::NormalOperationMode)
         };
+
+        #[cfg(feature = "full")]
         let ext_spi = {
             let mut config = spi::Config::default();
             config.frequency = user_config.external_spi_frequency;
@@ -280,6 +229,7 @@ impl Board<'static> {
             )
         };
 
+        #[cfg(feature = "full")]
         let onboard_spi = {
             let mut config = spi::Config::default();
             config.frequency = user_config.onboard_spi_frequency;
@@ -295,19 +245,27 @@ impl Board<'static> {
             )
         };
 
-        let leds = BoardLeds {
-            green: Output::new(peripherals.PB9, Level::Low, Speed::Low),
-            red: Output::new(peripherals.PB7, Level::Low, Speed::Low),
+        let leds = {
+            let mut green = Output::new(peripherals.PB9, Level::Low, Speed::Low);
+            let mut red = Output::new(peripherals.PB7, Level::Low, Speed::Low);
+            green.set_low();
+            red.set_low();
+            BoardLeds { green, red }
         };
 
-        let flash = Flash::new_blocking(peripherals.FLASH);
-        let flash = Mutex::new(RefCell::new(flash));
+        let flash = Flash::new_blocking(peripherals.FLASH).into_blocking_regions();
+        let flash_bank1 = Mutex::new(RefCell::new(flash.bank1_region));
+        let flash_bank2 = Mutex::new(RefCell::new(flash.bank2_region));
 
-        Ok(Self {
+        let serial_number = get_serial_number_as_hex();
+
+        #[cfg(feature = "full")]
+        return Self {
             adc,
             can,
             crc,
-            flash,
+            flash_bank1,
+            flash_bank2,
             inverter,
             leds,
             ext_i2c,
@@ -316,7 +274,17 @@ impl Board<'static> {
             onboard_spi,
             uart,
             usb,
-        })
+            serial_number,
+        };
+
+        #[cfg(not(feature = "full"))]
+        Self {
+            flash_bank1,
+            flash_bank2,
+            leds,
+            usb,
+            serial_number,
+        }
     }
 
     fn configure_mcu() -> Peripherals {
@@ -344,16 +312,5 @@ impl Board<'static> {
             config
         };
         embassy_stm32::init(config)
-    }
-}
-
-#[derive(Debug, defmt::Format)]
-pub enum Error {
-    AS6500(as5600::Error),
-}
-
-impl From<as5600::Error> for Error {
-    fn from(e: as5600::Error) -> Self {
-        Self::AS6500(e)
     }
 }

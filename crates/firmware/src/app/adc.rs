@@ -1,9 +1,9 @@
-use crate::board::{BoardAdc, BoardInverter};
 use controller_shared::strategy::ControlStrategy;
 use controller_shared::{control_step, update_strategy, RawSnapshot};
 use core::sync::atomic::Ordering;
 use embassy_futures::join::join5;
 use embassy_time::{with_timeout, Duration, Instant};
+use hardware::{BoardAdc, BoardInverter};
 use logging::FreqMeter;
 use crate::app::communication::CONTROL_COMMAND_CHANNEL;
 

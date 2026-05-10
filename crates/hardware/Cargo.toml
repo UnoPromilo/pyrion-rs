@@ -1,0 +1,19 @@
+[package]
+name = "hardware"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+full = ["dep:adc", "dep:crc-engine", "dep:inverter", "dep:user-config"]
+defmt = ["embassy-stm32/defmt", "embassy-sync/defmt", "adc/defmt", "crc-engine/defmt", "inverter/defmt", "user-config/defmt", "embassy-usb/defmt"]
+
+[dependencies]
+embassy-stm32 = { version = "0.6.0", features = ["time", "time-driver-any", "stm32g474re", "dual-bank", "unstable-pac", "exti"] }
+embassy-sync = { version = "0.8.0" }
+embassy-usb = { version = "0.6.0" }
+static_cell = { version = "2.1.1" }
+
+adc = { path = "../drivers/adc", optional = true }
+crc-engine = { path = "../utils/crc_engine", features = ["hardware"], optional = true }
+inverter = { path = "../drivers/inverter", optional = true }
+user-config = { path = "../user_config", optional = true }

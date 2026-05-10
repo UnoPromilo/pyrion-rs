@@ -1,8 +1,8 @@
 use crate::app::{COMMAND_CHANNEL, EVENT_CHANNEL};
-use crate::board::BoardUart;
 use communication::packet::{Interface, PACKET_SIZE, Packet};
 use embassy_stm32::mode::Async;
 use embassy_stm32::usart::UartTx;
+use hardware::BoardUart;
 use logging::error;
 
 #[embassy_executor::task]

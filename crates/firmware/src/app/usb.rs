@@ -1,20 +1,29 @@
 use crate::app::{COMMAND_CHANNEL, EVENT_CHANNEL};
-use crate::board::{BoardFlash, BoardUsb};
 use communication::channel_types::EventSubscriber;
 use communication::packet::{Interface, Packet};
 use embassy_boot_stm32::{AlignedBuffer, BlockingFirmwareState, FirmwareUpdaterConfig};
-use embassy_stm32::flash::WRITE_SIZE;
+use embassy_embedded_hal::flash::partition::BlockingPartition;
+use embassy_stm32::flash::{Bank1Region, Blocking, WRITE_SIZE};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Duration;
-use embassy_usb::{msos, Builder};
-use embassy_usb::class::cdc_acm::{CdcAcmClass, Receiver, Sender, State};
-use embassy_usb::class::dfu::app_mode::{usb_dfu, DfuState, Handler};
+use embassy_usb::Builder;
+use embassy_usb::class::cdc_acm;
+use embassy_usb::class::cdc_acm::{CdcAcmClass, Receiver, Sender};
+use embassy_usb::class::dfu::app_mode::{DfuState, Handler, usb_dfu};
 use embassy_usb::class::dfu::consts::DfuAttributes;
 use embassy_usb::driver::EndpointError;
+use hardware::usb::{UsbBuffers, WinUsbExt};
+use hardware::{BoardFlashBank1, BoardFlashBank2, BoardUsb, configure_dfu_win_usb};
 use logging::info;
-use user_config::UserConfig;
+use static_cell::StaticCell;
 
-const DEVICE_INTERFACE_GUIDS: &[&str] = &["{EAA9A5DC-30BA-44BC-9232-606CDC875321}"];
+type DfuStateType<'a> =
+    DfuState<DfuHandler<'a, BlockingPartition<'a, NoopRawMutex, Bank1Region<'a, Blocking>>>>;
 
+static ALIGNED_BUFFER: StaticCell<AlignedBuffer<WRITE_SIZE>> = StaticCell::new();
+static USB_BUFFERS: StaticCell<UsbBuffers> = StaticCell::new();
+static CDC_STATE: StaticCell<cdc_acm::State> = StaticCell::new();
+static DFU_STATE: StaticCell<DfuStateType<'static>> = StaticCell::new();
 
 struct DfuHandler<'d, FLASH: embedded_storage::nor_flash::NorFlash> {
     firmware_state: BlockingFirmwareState<'d, FLASH>,
@@ -22,7 +31,9 @@ struct DfuHandler<'d, FLASH: embedded_storage::nor_flash::NorFlash> {
 
 impl<FLASH: embedded_storage::nor_flash::NorFlash> Handler for DfuHandler<'_, FLASH> {
     fn enter_dfu(&mut self) {
-        self.firmware_state.mark_dfu().expect("Failed to mark DFU mode");
+        self.firmware_state
+            .mark_dfu()
+            .expect("Failed to mark DFU mode");
         cortex_m::peripheral::SCB::sys_reset();
     }
 }
@@ -30,61 +41,49 @@ impl<FLASH: embedded_storage::nor_flash::NorFlash> Handler for DfuHandler<'_, FL
 #[embassy_executor::task]
 pub async fn task_usb(
     driver: BoardUsb<'static>,
-    user_config: &'static UserConfig,
-    flash: BoardFlash<'static>,
+    usb_config: embassy_usb::Config<'static>,
+    flash_bank1: &'static BoardFlashBank1<'static>,
+    flash_bank2: &'static BoardFlashBank2<'static>,
 ) {
-    let mut config = embassy_usb::Config::new(0x1209, 0x2aaa);
-    config.manufacturer = Some("UnoProgramo");
-    config.product = Some(user_config.device_name);
-    let serial_hex = serial_hex(embassy_stm32::uid::uid());
-    config.serial_number = Some(core::str::from_utf8(&serial_hex).unwrap());
-    config.max_power = 500;
-    config.max_packet_size_0 = 64;
-    let mut config_descriptor = [0; 256];
-    let mut bos_descriptor = [0; 256];
-    let mut msos_descriptor = [0; 512];
-    let mut control_buf = [0; 4096];
-    let mut cdc_state = State::default();
+    let usb_buffers = USB_BUFFERS.init(UsbBuffers::new());
+    let cdc_state = CDC_STATE.init(cdc_acm::State::default());
+    let aligned_buffer = ALIGNED_BUFFER.init(AlignedBuffer([0; WRITE_SIZE]));
 
-    let mut magic = AlignedBuffer([0; WRITE_SIZE]);
-    let firmware_config = FirmwareUpdaterConfig::from_linkerfile_blocking(&flash, &flash);
-    let mut firmware_state = BlockingFirmwareState::from_config(firmware_config, &mut magic.0);
+    let firmware_config = FirmwareUpdaterConfig::from_linkerfile_blocking(flash_bank2, flash_bank1);
+    let mut firmware_state =
+        BlockingFirmwareState::from_config(firmware_config, &mut aligned_buffer.0);
     firmware_state.mark_booted().expect("Failed to mark booted");
+
     let dfu_handler = DfuHandler { firmware_state };
-    let mut dfu_state = DfuState::new(dfu_handler, DfuAttributes::CAN_DOWNLOAD, Duration::from_millis(2500));
+    let dfu_state = DFU_STATE.init(DfuState::new(
+        dfu_handler,
+        DfuAttributes::CAN_DOWNLOAD,
+        Duration::from_millis(2500),
+    ));
 
     let mut builder = Builder::new(
         driver,
-        config,
-        &mut config_descriptor,
-        &mut bos_descriptor,
-        &mut msos_descriptor,
-        &mut control_buf,
+        usb_config,
+        &mut usb_buffers.config,
+        &mut usb_buffers.bos,
+        &mut usb_buffers.msos,
+        &mut usb_buffers.control,
     );
 
-    let class = CdcAcmClass::new(&mut builder, &mut cdc_state, 64);
+    let cdc_class = CdcAcmClass::new(&mut builder, cdc_state, 64);
 
-    builder.msos_descriptor(msos::windows_version::WIN8_1, 2);
-    builder.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
-    builder.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
-        "DeviceInterfaceGUIDs",
-        msos::PropertyData::RegMultiSz(DEVICE_INTERFACE_GUIDS),
-    ));
+    builder.apply_win_usb();
 
-    usb_dfu(&mut builder, &mut dfu_state, |func| {
-        func.msos_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
-        func.msos_feature(msos::RegistryPropertyFeatureDescriptor::new(
-            "DeviceInterfaceGUIDs",
-            msos::PropertyData::RegMultiSz(DEVICE_INTERFACE_GUIDS),
-        ));
+    usb_dfu(&mut builder, dfu_state, |func| {
+        configure_dfu_win_usb!(func);
     });
     let mut usb = builder.build();
 
-    embassy_futures::join::join(usb.run(), run(class)).await;
+    embassy_futures::join::join(usb.run(), run(cdc_class)).await;
 }
-async fn run<'a>(class: CdcAcmClass<'a, BoardUsb<'a>>) {
+async fn run<'a>(cdc_class: CdcAcmClass<'a, BoardUsb<'a>>) {
     let mut rx_subscriber = EVENT_CHANNEL.subscriber().expect("Can't subscribe to usb");
-    let (mut tx, mut rx) = class.split();
+    let (mut tx, mut rx) = cdc_class.split();
     loop {
         tx.wait_connection().await;
         info!("USB connected");
@@ -114,19 +113,4 @@ async fn handle_rx<'a>(rx: &mut Receiver<'a, BoardUsb<'a>>) -> Result<(), Endpoi
         let packet = Packet::from_slice(&buffer[..len], Some(Interface::Usb));
         COMMAND_CHANNEL.send(packet).await;
     }
-}
-
-fn serial_hex(b: [u8; 12]) -> [u8; 24] {
-    fn hex(n: u8) -> u8 {
-        b"0123456789abcdef"[n as usize]
-    }
-
-    let mut out = [0u8; 24];
-    let mut i = 0;
-    for &byte in &b {
-        out[i] = hex(byte >> 4);
-        out[i + 1] = hex(byte & 0x0F);
-        i += 2;
-    }
-    out
 }

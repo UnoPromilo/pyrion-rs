@@ -1,7 +1,7 @@
-use crate::board::BoardI2c;
 use as5600::AS5600;
 use core::sync::atomic::Ordering;
 use embassy_time::{Duration, Timer};
+use hardware::BoardI2c;
 use logging::error_register::ErrorRegister;
 use logging::{FreqMeter, error, error_register};
 
