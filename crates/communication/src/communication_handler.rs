@@ -19,7 +19,6 @@ pub async fn run(
     event_channel: &'static EventChannel,
     control_command_channel: &'static ControlCommandChannel,
     crc: &mut impl CrcEngine,
-    //update_manager: &mut FirmwareUpdateManager<'_>,
 ) {
     let mut telemetry_ticker = embassy_time::Ticker::every(Duration::from_hz(10));
     let mut usb_decoder = Decoder::new();
@@ -41,7 +40,6 @@ pub async fn run(
                     &encoder,
                     &mut encoding_buffer,
                     &incoming_packet,
-                    //update_manager,
                     control_command_channel,
                 )
                 .await;
@@ -59,7 +57,6 @@ async fn handle_incoming_packet(
     encoder: &Encoder,
     encoding_buffer: &mut [u8],
     incoming_packet: &Packet,
-    //update_manager: &mut FirmwareUpdateManager<'_>,
     control_command_channel: &ControlCommandChannel,
 ) {
     let decoder = match &incoming_packet.interface {
@@ -75,7 +72,7 @@ async fn handle_incoming_packet(
     for &byte in &incoming_packet.buffer[..incoming_packet.length] {
         match decoder.feed(byte, crc) {
             Some(Ok(command)) => {
-                let event = execute_command(command, /*update_manager,*/ control_command_channel).await;
+                let event = execute_command(command, control_command_channel).await;
                 if let Some(event) = event {
                     let length = encoder.encode(&event, encoding_buffer, crc);
                     for packet in

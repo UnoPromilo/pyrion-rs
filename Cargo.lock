@@ -334,7 +334,6 @@ dependencies = [
  "logging",
  "transport",
  "units",
- "update-manager",
 ]
 
 [[package]]
@@ -350,7 +349,6 @@ dependencies = [
  "embassy-time",
  "logging",
  "transport",
- "update-manager",
 ]
 
 [[package]]
@@ -1157,7 +1155,6 @@ dependencies = [
  "panic-probe",
  "static_cell",
  "transport",
- "update-manager",
  "user-config",
 ]
 
@@ -2972,18 +2969,6 @@ checksum = "a739f83872836c82a4f2527d4e54b37007b3de68cafe7edde95fd695968bf4b9"
 dependencies = [
  "num-traits",
  "typenum",
-]
-
-[[package]]
-name = "update-manager"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "embassy-boot",
- "embassy-boot-stm32",
- "embassy-embedded-hal",
- "embassy-stm32",
- "embassy-sync",
 ]
 
 [[package]]

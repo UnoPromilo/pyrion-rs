@@ -37,4 +37,3 @@ logging = { path = "../utils/logging", features = ["freq-meter", "error-register
 transport = { path = "../transport", features = ["defmt"] }
 communication = { path = "../communication", features = ["defmt"] }
 user-config = { path = "../user_config", features = ["defmt"] }
-update-manager = { path = "../update_manager", features = ["defmt"] }
