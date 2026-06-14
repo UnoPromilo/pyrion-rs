@@ -64,7 +64,7 @@ async fn handle_incoming_packet(
         Some(Interface::Usb) => usb_decoder,
         None => {
             warn!(
-                "Received broadcast packet without interface specified - broadcasts are output-only"
+                "Received a broadcast packet without an interface specified - broadcasts are output-only"
             );
             return;
         }
@@ -73,13 +73,11 @@ async fn handle_incoming_packet(
         match decoder.feed(byte, crc) {
             Some(Ok(command)) => {
                 let event = execute_command(command, control_command_channel).await;
-                if let Some(event) = event {
-                    let length = encoder.encode(&event, encoding_buffer, crc);
-                    for packet in
-                        split_into_packets(&encoding_buffer[..length], incoming_packet.interface)
-                    {
-                        event_channel.publish_immediate(packet);
-                    }
+                let length = encoder.encode(&event, encoding_buffer, crc);
+                for packet in
+                    split_into_packets(&encoding_buffer[..length], incoming_packet.interface)
+                {
+                    event_channel.publish_immediate(packet);
                 }
             }
             Some(Err(error)) => {

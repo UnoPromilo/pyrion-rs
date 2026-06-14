@@ -1,6 +1,8 @@
 use crate::helpers::{decode_f32, decode_u32, decode_u64};
 use crate::packet::Packet;
 use core::array::TryFromSliceError;
+use enum_iterator::Sequence;
+use logging::error_register;
 
 pub mod decoder;
 pub mod encoder;
@@ -11,10 +13,11 @@ pub enum Event {
     Telemetry(Telemetry),                   // 0x02
     Success,                                // 0x03
     Failure,                                // 0x04
+    ErrorRegister(ErrorRegister),           // 0x71
 }
 
 impl Packet for Event {
-    type Error = Error;
+    type Error = EventDeserializationError;
 
     fn deserialize(data: &[u8]) -> Result<Self, Self::Error> {
         let event_type = data[0];
@@ -29,7 +32,11 @@ impl Packet for Event {
             }
             0x03 => Ok(Event::Success),
             0x04 => Ok(Event::Failure),
-            _ => Err(Error::EventNotFound),
+            0x71 => {
+                let error_register = ErrorRegister::deserialize(&data[1..])?;
+                Ok(Event::ErrorRegister(error_register))
+            }
+            _ => Err(EventDeserializationError::EventNotFound),
         }
     }
 
@@ -52,6 +59,11 @@ impl Packet for Event {
             Event::Failure => {
                 buffer[0] = 0x04;
                 1
+            }
+            Event::ErrorRegister(error_register) => {
+                buffer[0] = 0x71;
+                let content_len = error_register.serialize(&mut buffer[1..]);
+                1 + content_len
             }
         }
     }
@@ -77,6 +89,11 @@ pub struct DeviceIntroduction {
     pub firmware_version: [u8; 3],
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct ErrorRegister {
+    pub cells: [error_register::ErrorValue; error_register::Error::CARDINALITY],
+}
+
 impl Telemetry {
     pub fn serialize(&self, buffer: &mut [u8]) -> usize {
         buffer[..4].copy_from_slice(&self.cpu_temperature.to_le_bytes());
@@ -92,7 +109,7 @@ impl Telemetry {
         44
     }
 
-    pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
+    pub fn deserialize(data: &[u8]) -> Result<Self, EventDeserializationError> {
         let cpu_temperature = decode_f32(&data[0..4])?;
         let driver_temperature = decode_f32(&data[4..8])?;
         let motor_temperature = decode_f32(&data[8..12])?;
@@ -125,24 +142,57 @@ impl DeviceIntroduction {
         15
     }
 
-    pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
+    pub fn deserialize(data: &[u8]) -> Result<Self, EventDeserializationError> {
         Ok(Self {
-            uid: data[0..12].try_into().map_err(|_| Error::InvalidContent)?,
-            firmware_version: data[12..15].try_into().map_err(|_| Error::InvalidContent)?,
+            uid: data[0..12]
+                .try_into()
+                .map_err(|_| EventDeserializationError::InvalidContent)?,
+            firmware_version: data[12..15]
+                .try_into()
+                .map_err(|_| EventDeserializationError::InvalidContent)?,
         })
+    }
+}
+
+impl ErrorRegister {
+    pub fn serialize(&self, buffer: &mut [u8]) -> usize {
+        for (i, cell) in self.cells.iter().enumerate() {
+            buffer[i] = *cell as u8;
+        }
+
+        self.cells.len()
+    }
+
+    pub fn deserialize(data: &[u8]) -> Result<Self, EventDeserializationError> {
+        if data.len() != error_register::Error::CARDINALITY {
+            return Err(EventDeserializationError::InvalidContent);
+        }
+
+        let mut cells = [error_register::ErrorValue::Clean; error_register::Error::CARDINALITY];
+
+        for (i, &v) in data.iter().enumerate() {
+            cells[i] = match v {
+                0 => error_register::ErrorValue::Clean,
+                1 => error_register::ErrorValue::Ongoing,
+                2 => error_register::ErrorValue::Resolved,
+                _ => return Err(EventDeserializationError::InvalidContent),
+            };
+        }
+
+        Ok(Self { cells })
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error {
+pub enum EventDeserializationError {
     EventNotFound,
     InvalidContent,
 }
 
-impl From<TryFromSliceError> for Error {
+impl From<TryFromSliceError> for EventDeserializationError {
     fn from(_: TryFromSliceError) -> Self {
-        Error::InvalidContent
+        EventDeserializationError::InvalidContent
     }
 }
 
@@ -199,5 +249,17 @@ mod tests {
         let result = Event::deserialize(&buffer[..len]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Event::Failure);
+    }
+
+    #[test]
+    pub fn error_register_event() {
+        let mut buffer = [0; 100];
+        let error_register = ErrorRegister {
+            cells: [error_register::ErrorValue::Ongoing; error_register::Error::CARDINALITY],
+        };
+        let len = Event::ErrorRegister(error_register).serialize(&mut buffer);
+        let result = Event::deserialize(&buffer[..len]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Event::ErrorRegister(error_register));
     }
 }

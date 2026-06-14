@@ -3,22 +3,23 @@ use crate::features::interface;
 use crate::features::interface::InterfaceManager;
 use crate::features::session::DeviceHandleWrapper;
 use crate::proto::pyrion::v1 as pyrion_v1;
+use crate::proto::pyrion::v1::controller_message::ControllerMessage;
 use crate::proto::pyrion::v1::controller_message::controller_message::Payload as ControllerMessagePayload;
 use crate::proto::pyrion::v1::device_message::device_message::Payload as DeviceMessagePayload;
+use crate::proto::pyrion::v1::device_message::{DeviceIntroduction, DeviceMessage, Telemetry};
+use logging::error_register;
+pub use pyrion_v1::session::device_session_server::DeviceSessionServer;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tonic::codegen::tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
-use transport::event::Event;
-use uuid::Uuid;
-
-use crate::proto::pyrion::v1::controller_message::ControllerMessage;
-use crate::proto::pyrion::v1::device_message::{DeviceIntroduction, DeviceMessage, Telemetry};
-pub use pyrion_v1::session::device_session_server::DeviceSessionServer;
 use transport::Command;
 use transport::command::{FIRMWARE_BLOCK_MAX_DATA_SIZE, FirmwareBlock};
+use transport::event::Event;
+use uuid::Uuid;
+use crate::proto::pyrion::v1::device_message;
 
 #[derive(Debug)]
 pub struct DeviceSessionService {
@@ -209,14 +210,43 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
         },
         Event::Success => DeviceMessage {
             payload: Some(DeviceMessagePayload::Success(
-                crate::proto::pyrion::v1::device_message::Success {},
+                device_message::Success {},
             )),
         },
         Event::Failure => DeviceMessage {
             payload: Some(DeviceMessagePayload::Failure(
-                crate::proto::pyrion::v1::device_message::Failure {},
+                device_message::Failure {},
             )),
         },
+        Event::ErrorRegister(error_register) => DeviceMessage {
+            payload: Some(DeviceMessagePayload::ErrorRegister(
+                device_message::ErrorRegister {
+                    errors: enum_iterator::all::<error_register::Error>()
+                        .enumerate()
+                        .filter_map(|(i, err)| {
+                            let value = error_register.cells[i];
+                            let mapped_error = match err {
+                                error_register::Error::Encoder => device_message::ErrorType::Encoder,
+                            };
+
+                            match value {
+                                error_register::ErrorValue::Clean => None,
+
+                                error_register::ErrorValue::Ongoing => Some(device_message::ErrorEntry {
+                                    error: mapped_error as i32,
+                                    state: device_message::ErrorState::Ongoing as i32,
+                                }),
+
+                                error_register::ErrorValue::Resolved => Some(device_message::ErrorEntry {
+                                    error: mapped_error as i32,
+                                    state: device_message::ErrorState::Resolved as i32,
+                                }),
+                            }
+                        })
+                        .collect(),
+                },
+            )),
+        }
     }
 }
 
@@ -245,7 +275,9 @@ fn map_proto_to_command(message: ControllerMessage) -> Result<Command, CommandMa
             }
             ControllerMessagePayload::FinalizeFirmwareUpdate(_) => {
                 Ok(Command::FinalizeFirmwareUpdate)
-            }
+            },
+            ControllerMessagePayload::ReportErrors(_) => Ok(Command::ReportErrors),
+            ControllerMessagePayload::ResetErrors(_) => Ok(Command::ResetErrors),
         })
         .ok_or(CommandMappingError::NoPayload)?
 }

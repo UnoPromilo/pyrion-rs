@@ -1,8 +1,11 @@
+#[cfg(feature = "freq-meter")]
+use crate::debug;
 use core::sync::atomic::Ordering;
+#[cfg(feature = "freq-meter")]
 use embassy_time::{Duration, Instant};
 use portable_atomic::AtomicU32;
-use crate::debug;
 
+#[cfg(feature = "freq-meter")]
 pub struct FreqMeter {
     print_last: Instant,
     print_count: u32,
@@ -12,11 +15,17 @@ pub struct FreqMeter {
     linked: Option<&'static AtomicU32>,
 }
 
+#[cfg(not(feature = "freq-meter"))]
+pub struct FreqMeter {
+    linked: Option<&'static AtomicU32>,
+}
+
 impl FreqMeter {
     pub fn named(name: &'static str) -> Self {
         Self::new(name)
     }
 
+    #[cfg(feature = "freq-meter")]
     fn new(name: &'static str) -> Self {
         Self {
             print_last: Instant::now(),
@@ -27,6 +36,11 @@ impl FreqMeter {
             name,
         }
     }
+    #[cfg(not(feature = "freq-meter"))]
+    fn new(_name: &'static str) -> Self {
+        Self { linked: None }
+    }
+
     #[cfg(feature = "freq-meter")]
     pub fn tick(&mut self) {
         const PRINT_INTERVAL: Duration = Duration::from_secs(5);

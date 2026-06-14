@@ -59,6 +59,7 @@ fn main() -> ! {
     low_priority_executor.run(|low_priority_spawner| {
         low_priority_spawner.spawn(app::task_communication(board.crc).unwrap());
         low_priority_spawner.spawn(app::task_uart(board.uart).unwrap());
+        low_priority_spawner.spawn(app::task_leds(board.leds).unwrap());
         low_priority_spawner
             .spawn(app::task_usb(board.usb, usb_config, flash_bank1, flash_bank2).unwrap());
     });

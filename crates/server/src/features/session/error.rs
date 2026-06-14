@@ -1,7 +1,7 @@
 #[derive(Debug)]
 pub enum DecoderError {
     IoError(std::io::Error),
-    DecodeError(transport::decoder::DecoderError<transport::event::Error>),
+    DecodeError(transport::decoder::DecoderError<transport::event::EventDeserializationError>),
 }
 
 impl From<std::io::Error> for DecoderError {
@@ -10,8 +10,8 @@ impl From<std::io::Error> for DecoderError {
     }
 }
 
-impl From<transport::decoder::DecoderError<transport::event::Error>> for DecoderError {
-    fn from(e: transport::decoder::DecoderError<transport::event::Error>) -> Self {
+impl From<transport::decoder::DecoderError<transport::event::EventDeserializationError>> for DecoderError {
+    fn from(e: transport::decoder::DecoderError<transport::event::EventDeserializationError>) -> Self {
         Self::DecodeError(e)
     }
 }

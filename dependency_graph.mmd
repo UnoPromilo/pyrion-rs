@@ -1,0 +1,107 @@
+flowchart TB
+    %% Runs before the firmware
+    bootloader[Bootloader]
+    
+    %% Responsible for executing commands
+    command-handler[Command handler]
+    
+    %% Handles raw data from different channels
+    communication[Communication]
+    
+    subgraph controllers
+        %% Set of common logic
+        controller-shared[Controller shared]
+        
+        %% FOC specific logic
+        foc[FOC]
+    end
+    subgraph drivers
+        %% ADC injected reading driver
+        adc[ADC]
+        
+        %% AS5600 driver
+        as5600[AS5600]
+        
+        %% Inverter logic
+        inverter[Inverter]
+    end
+    
+    %% Main crate with firmware
+    firmware[Firmware]
+    
+    %% Board specific configuration logic
+    hardware[Hardware]
+    
+    %% LED control logic
+    led-manager[LED manager]
+    
+    %% Control server used to communicate with boards, exposes gRPC controllers
+    server[Server]
+    
+    %% Set of messages to have common set of instructions for board and server
+    transport[Transport]
+    
+    %% Handles storing and reading user configuration
+    user-config[User configuration]
+    
+    subgraph utils
+        %% CRC abstraction
+        crc-engine[CRC engine]
+        
+        %% Logging abstraction
+        logging[Logging]
+        
+        %% PID abstraction
+        pid[PID]
+        
+        %% SI Units set
+        units[Units]
+    end
+
+bootloader --> hardware
+
+
+command-handler --> controller-shared
+command-handler --> transport
+command-handler --> units
+
+
+communication --> command-handler
+communication --> crc-engine
+
+controller-shared --> foc
+controller-shared --> units
+
+foc --> units
+foc --> pid
+
+adc --> logging
+
+as5600 --> logging
+
+inverter --> logging
+
+firmware --> as5600
+firmware --> controller-shared
+firmware --> hardware
+firmware --> logging
+firmware --> transport
+firmware --> communication
+firmware --> user-config
+firmware --> led-manager
+
+hardware --> adc
+hardware --> crc-engine
+hardware --> inverter
+hardware --> user-config
+
+led-manager --> hardware
+led-manager --> controller-shared
+
+server --> transport
+server --> crc-engine
+
+transport --> crc-engine
+transport --> logging
+
+pid --> units

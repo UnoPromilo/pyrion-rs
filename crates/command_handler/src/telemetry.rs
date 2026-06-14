@@ -19,7 +19,7 @@ pub fn get_telemetry() -> Telemetry {
         power_consumption: 0.0,   // TODO add power consumption
         duty_cycle: 0.0,          // TODO add duty cycle
         uptime: Instant::now().as_millis(),
-        ongoing_errors: ErrorRegister::shared().get_ongoing().count() as u32,
-        resolved_errors: ErrorRegister::shared().get_resolved().count() as u32,
+        ongoing_errors: ErrorRegister::shared().ongoing_count() as u32,
+        resolved_errors: ErrorRegister::shared().resolved_count() as u32,
     }
 }

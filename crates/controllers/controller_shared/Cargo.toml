@@ -12,5 +12,4 @@ embassy-time = { version = "0.5.0" }
 embassy-sync = { version = "0.8.0" }
 foc = { path = "../foc" }
 units = { path = "../../utils/units" }
-transport = { path = "../../transport" }
 portable-atomic = {version = "1.11.1", features = ["float"]}

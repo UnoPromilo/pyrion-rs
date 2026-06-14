@@ -400,7 +400,6 @@ dependencies = [
  "embassy-time",
  "foc",
  "portable-atomic",
- "transport",
  "units",
 ]
 
@@ -1151,6 +1150,7 @@ dependencies = [
  "embassy-usb",
  "embedded-storage",
  "hardware",
+ "led-manager",
  "logging",
  "panic-probe",
  "static_cell",
@@ -1355,10 +1355,6 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
-
-[[package]]
-name = "hal"
-version = "0.1.0"
 
 [[package]]
 name = "hardware"
@@ -1673,6 +1669,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
+name = "led-manager"
+version = "0.1.0"
+dependencies = [
+ "controller-shared",
+ "embassy-time",
+ "hardware",
+ "logging",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1752,10 +1758,6 @@ name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
-
-[[package]]
-name = "math"
-version = "0.1.0"
 
 [[package]]
 name = "memchr"
@@ -2384,8 +2386,10 @@ dependencies = [
  "anyhow",
  "config",
  "crc-engine",
+ "enum-iterator",
  "env_logger",
  "futures",
+ "logging",
  "prost",
  "serde",
  "tokio",
@@ -2894,6 +2898,8 @@ version = "0.1.0"
 dependencies = [
  "crc-engine",
  "defmt 1.0.1",
+ "enum-iterator",
+ "logging",
 ]
 
 [[package]]

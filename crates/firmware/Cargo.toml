@@ -28,12 +28,13 @@ cortex-m-rt = "0.7.0"
 critical-section = "1.1"
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 static_cell = { version = "2.1.1" }
-embedded-storage = {version = "0.3.1"}
+embedded-storage = { version = "0.3.1" }
 
 as5600 = { path = "../drivers/as5600", features = ["defmt"] }
 controller-shared = { path = "../controllers/controller_shared", features = ["defmt"] }
 hardware = { path = "../hardware", features = ["full", "defmt"] }
-logging = { path = "../utils/logging", features = ["freq-meter", "error-register"] }
+led-manager = { path = "../led_manager", features = ["hardware-support"] }
+logging = { path = "../utils/logging", features = ["freq-meter"] }
 transport = { path = "../transport", features = ["defmt"] }
 communication = { path = "../communication", features = ["defmt"] }
 user-config = { path = "../user_config", features = ["defmt"] }

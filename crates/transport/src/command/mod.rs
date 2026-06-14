@@ -14,7 +14,9 @@ pub enum Command {
     IntroduceYourself,                 // 0x01
     Stop,                              // 0x02
     WriteFirmwareBlock(FirmwareBlock), // 0x10
-    FinalizeFirmwareUpdate,            //0x11
+    FinalizeFirmwareUpdate,            // 0x11
+    ReportErrors,                      // 0x71
+    ResetErrors,                       // 0x72
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -38,6 +40,8 @@ impl Packet for Command {
                 Ok(Command::WriteFirmwareBlock(packet))
             }
             0x11 => Ok(Command::FinalizeFirmwareUpdate),
+            0x71 => Ok(Command::ReportErrors),
+            0x72 => Ok(Command::ResetErrors),
             _ => Err(Error::CommandNotFound),
         }
     }
@@ -58,6 +62,14 @@ impl Packet for Command {
             }
             Command::FinalizeFirmwareUpdate => {
                 buffer[0] = 0x11;
+                1
+            }
+            Command::ReportErrors => {
+                buffer[0] = 0x71;
+                1
+            }
+            Command::ResetErrors => {
+                buffer[0] = 0x72;
                 1
             }
         }
@@ -162,5 +174,25 @@ mod tests {
         let result = Command::deserialize(&buffer[..len]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Command::FinalizeFirmwareUpdate);
+    }
+
+    #[test]
+    fn report_errors_command() {
+        let mut buffer = [0; MAX_PACKET_SIZE];
+        let command = Command::ReportErrors;
+        let len = command.serialize(&mut buffer);
+        let result = Command::deserialize(&buffer[..len]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Command::ReportErrors);
+    }
+
+    #[test]
+    fn reset_errors_command() {
+        let mut buffer = [0; MAX_PACKET_SIZE];
+        let command = Command::ResetErrors;
+        let len = command.serialize(&mut buffer);
+        let result = Command::deserialize(&buffer[..len]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Command::ResetErrors);
     }
 }

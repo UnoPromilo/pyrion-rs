@@ -9,6 +9,8 @@ defmt = ["dep:defmt", "crc-engine/defmt"]
 [dependencies]
 defmt = { version = "1.0.1", optional = true }
 crc-engine = { path = "../utils/crc_engine" }
+logging = {path = "../utils/logging", features = ["errors"]}
+enum-iterator = { version = "2.3.0" }
 
 [dev-dependencies]
 crc-engine = { path = "../utils/crc_engine", features = ["software"] }

@@ -1,0 +1,15 @@
+[package]
+name = "led-manager"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+hardware-support = ["dep:hardware"]
+
+[dependencies]
+embassy-time = { version = "0.5.1" }
+
+controller-shared = { path = "../controllers/controller_shared" }
+logging = { path = "../utils/logging", features = ["errors"] }
+
+hardware = { path = "../hardware", optional = true}

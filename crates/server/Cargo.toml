@@ -19,5 +19,8 @@ transport = { path = "../transport" }
 crc-engine = { path = "../utils/crc_engine", features = ["software"] }
 futures = "0.3.31"
 uuid = { version = "1.18.1", features = ["v4"] }
+logging = {path = "../utils/logging", features = ["errors"]}
+enum-iterator = "2.3.0"
+
 [build-dependencies]
 tonic-prost-build = "0.14.2"
