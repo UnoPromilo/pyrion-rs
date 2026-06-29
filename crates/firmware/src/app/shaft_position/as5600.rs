@@ -2,8 +2,8 @@ use as5600::AS5600;
 use core::sync::atomic::Ordering;
 use embassy_time::{Duration, Timer};
 use hardware::BoardI2c;
-use logging::error_register::ErrorRegister;
-use logging::{FreqMeter, error, error_register};
+use logging::fault_register::FaultRegister;
+use logging::{FreqMeter, error, fault_register};
 
 pub async fn task_as5600(ext_i2c: BoardI2c<'static>) {
     let config = as5600::Config::default();
@@ -11,7 +11,7 @@ pub async fn task_as5600(ext_i2c: BoardI2c<'static>) {
     loop {
         let error = run_until_failure(&mut as5600).await.unwrap_err();
         error!("AS5600 error: {}", error);
-        ErrorRegister::shared().set(error_register::Error::Encoder);
+        FaultRegister::shared().set(fault_register::FaultType::Encoder);
         Timer::after(Duration::from_millis(100)).await;
     }
 }
@@ -21,7 +21,7 @@ async fn run_until_failure<'a>(as5600: &mut AS5600<BoardI2c<'a>>) -> Result<(), 
     as5600.write_config().await?;
     let mut freq_meter = FreqMeter::named("ENC");
     freq_meter.link(&state.encoder_loop_frequency);
-    ErrorRegister::shared().resolve_if_set(error_register::Error::Encoder);
+    FaultRegister::shared().resolve_if_set(fault_register::FaultType::Encoder);
     loop {
         let angle = as5600.read_angle().await?;
         state.raw_angle.store(angle, Ordering::Relaxed);

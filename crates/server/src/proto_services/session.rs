@@ -7,7 +7,7 @@ use crate::proto::pyrion::v1::controller_message::ControllerMessage;
 use crate::proto::pyrion::v1::controller_message::controller_message::Payload as ControllerMessagePayload;
 use crate::proto::pyrion::v1::device_message::device_message::Payload as DeviceMessagePayload;
 use crate::proto::pyrion::v1::device_message::{DeviceIntroduction, DeviceMessage, Telemetry};
-use logging::error_register;
+use logging::fault_register;
 pub use pyrion_v1::session::device_session_server::DeviceSessionServer;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -204,8 +204,8 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
                 current: telemetry.current_consumption,
                 duty_cycle: telemetry.duty_cycle,
                 uptime: telemetry.uptime,
-                ongoing_errors: telemetry.ongoing_errors,
-                resolved_errors: telemetry.resolved_errors,
+                active_faults: telemetry.active_faults,
+                latched_faults: telemetry.latched_faults,
             })),
         },
         Event::Success => DeviceMessage {
@@ -218,28 +218,28 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
                 device_message::Failure {},
             )),
         },
-        Event::ErrorRegister(error_register) => DeviceMessage {
-            payload: Some(DeviceMessagePayload::ErrorRegister(
-                device_message::ErrorRegister {
-                    errors: enum_iterator::all::<error_register::Error>()
+        Event::FaultRegister(error_register) => DeviceMessage {
+            payload: Some(DeviceMessagePayload::FaultRegister(
+                device_message::FaultRegister {
+                    faults: enum_iterator::all::<fault_register::FaultType>()
                         .enumerate()
                         .filter_map(|(i, err)| {
                             let value = error_register.cells[i];
                             let mapped_error = match err {
-                                error_register::Error::Encoder => device_message::ErrorType::Encoder,
+                                fault_register::FaultType::Encoder => device_message::FaultType::Encoder,
                             };
 
                             match value {
-                                error_register::ErrorValue::Clean => None,
+                                fault_register::FaultState::Clean => None,
 
-                                error_register::ErrorValue::Ongoing => Some(device_message::ErrorEntry {
-                                    error: mapped_error as i32,
-                                    state: device_message::ErrorState::Ongoing as i32,
+                                fault_register::FaultState::Active => Some(device_message::FaultEntry {
+                                    r#type: mapped_error as i32,
+                                    state: device_message::FaultState::Active as i32,
                                 }),
 
-                                error_register::ErrorValue::Resolved => Some(device_message::ErrorEntry {
-                                    error: mapped_error as i32,
-                                    state: device_message::ErrorState::Resolved as i32,
+                                fault_register::FaultState::Latched => Some(device_message::FaultEntry {
+                                    r#type: mapped_error as i32,
+                                    state: device_message::FaultState::Latched as i32,
                                 }),
                             }
                         })
@@ -276,8 +276,8 @@ fn map_proto_to_command(message: ControllerMessage) -> Result<Command, CommandMa
             ControllerMessagePayload::FinalizeFirmwareUpdate(_) => {
                 Ok(Command::FinalizeFirmwareUpdate)
             },
-            ControllerMessagePayload::ReportErrors(_) => Ok(Command::ReportErrors),
-            ControllerMessagePayload::ResetErrors(_) => Ok(Command::ResetErrors),
+            ControllerMessagePayload::ReportFaults(_) => Ok(Command::ReportFaults),
+            ControllerMessagePayload::ResetFaults(_) => Ok(Command::ResetFaults),
         })
         .ok_or(CommandMappingError::NoPayload)?
 }

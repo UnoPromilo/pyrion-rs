@@ -66,7 +66,7 @@ pub struct BoardAdc<'a> {
     pub adc2_running: adc::injected::Running<'a, ADC2, Continuous, 3>, // Driver_temp, motor_temp, voltage_sense
     pub adc3_running: adc::injected::Running<'a, ADC3, Continuous, 2>, // I_V, V_V
     pub adc4_running: adc::injected::Running<'a, ADC4, Continuous, 1>, // V_Ref
-    pub adc5_running: adc::injected::Running<'a, ADC5, Continuous, 3>, // I_W, V_W, Cpu_temp
+    pub adc5_running: adc::injected::Running<'a, ADC5, Continuous, 2>, // I_W, V_W, Cpu_temp
 }
 
 #[cfg(feature = "full")]

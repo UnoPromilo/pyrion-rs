@@ -1,4 +1,5 @@
 use units::si::electric_potential::millivolt;
+use units::si::electrical_resistance::milliohm;
 use units::si::thermodynamic_temperature::degree_celsius;
 use units::{ElectricCurrent, ElectricPotential, ElectricalResistance, ThermodynamicTemperature};
 
@@ -7,9 +8,9 @@ pub fn convert_to_current(
     vrefint_sample: u16,
     config: &ConfigValues,
 ) -> ElectricCurrent {
-    let zeroed_sample = sample as i32 - config.zero_point;
+    let zeroed_sample = sample as i32 - config.current_zero_offset;
     let voltage = convert_to_voltage(zeroed_sample, vrefint_sample);
-    voltage / config.gain / config.shunt_resistor
+    voltage / config.current_gain / config.shunt_resistance
 }
 
 pub fn convert_to_voltage(sample: i32, vrefint_sample: u16) -> ElectricPotential {
@@ -28,25 +29,28 @@ pub fn convert_to_temperature(sample: u16, vrefint_sample: u16) -> Thermodynamic
 
 fn convert_to_millivolts(sample: i32, vrefint_sample: u16) -> i32 {
     const VREFINT_MV: i32 = 1210; // mV
-    (sample) * VREFINT_MV / (vrefint_sample as i32)
+    sample * VREFINT_MV / (vrefint_sample as i32)
 }
 
 #[derive(Debug)]
 pub struct ConfigValues {
-    pub shunt_resistor: ElectricalResistance,
-    pub gain: f32,
-    pub zero_point: i32,
+    // Current sensing
+    pub shunt_resistance: ElectricalResistance,
+    pub current_zero_offset: i32,
+    pub current_gain: f32,
+
+    // Voltage sensing
+    pub v_bus_scale_ratio: f32,
 }
 
 // TODO remove default values, they should be taken from the config file
 impl Default for ConfigValues {
     fn default() -> Self {
         Self {
-            shunt_resistor: ElectricalResistance::new::<units::si::electrical_resistance::ohm>(
-                100.0,
-            ),
-            gain: 20.0,
-            zero_point: 2048,
+            shunt_resistance: ElectricalResistance::new::<milliohm>(5.0),
+            v_bus_scale_ratio: (39.0 + 2.0) / 2.0,
+            current_gain: 20.0,
+            current_zero_offset: 2048,
         }
     }
 }
@@ -92,8 +96,8 @@ mod tests {
                 expected: -3320.0,
                 config: {
                     let mut config = default_config();
-                    config.shunt_resistor = ElectricalResistance::new::<milliohm>(10.0);
-                    config.gain = 10.0;
+                    config.shunt_resistance = ElectricalResistance::new::<milliohm>(10.0);
+                    config.current_gain = 10.0;
                     config
                 },
             },
@@ -149,9 +153,10 @@ mod tests {
     }
     fn default_config() -> ConfigValues {
         ConfigValues {
-            shunt_resistor: ElectricalResistance::new::<milliohm>(100.0),
-            gain: 20.0,
-            zero_point: 2048,
+            shunt_resistance: ElectricalResistance::new::<milliohm>(100.0),
+            current_gain: 20.0,
+            current_zero_offset: 2048,
+            v_bus_scale_ratio: (39.0 + 2.0) / 2.0,
         }
     }
 }

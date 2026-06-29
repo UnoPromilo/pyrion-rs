@@ -32,7 +32,7 @@ pub fn control_step(
             let u = convert_to_current(values.i_u, values.v_ref, &default_config);
             let v = convert_to_current(values.i_v, values.v_ref, &default_config);
             let w = convert_to_current(values.i_w, values.v_ref, &default_config);
-            let v_bus = convert_to_voltage(values.v_bus as i32, values.v_ref);
+            let v_bus = convert_to_voltage(values.v_bus as i32, values.v_ref) * default_config.v_bus_scale_ratio;
             let cpu_temp = convert_to_temperature(values.temp_cpu, values.v_ref);
             store_in_state(u, v, w, v_bus, cpu_temp);
 

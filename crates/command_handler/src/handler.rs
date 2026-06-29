@@ -26,11 +26,11 @@ pub async fn execute_command(
         },
         Command::WriteFirmwareBlock(_block) => Event::Failure,
         Command::FinalizeFirmwareUpdate => Event::Failure,
-        Command::ReportErrors => Event::ErrorRegister(transport::event::ErrorRegister {
-            cells: logging::error_register::ErrorRegister::shared().snapshot(),
+        Command::ReportFaults => Event::FaultRegister(transport::event::FaultRegister {
+            cells: logging::fault_register::FaultRegister::shared().snapshot(),
         }),
-        Command::ResetErrors => {
-            logging::error_register::ErrorRegister::shared().reset();
+        Command::ResetFaults => {
+            logging::fault_register::FaultRegister::shared().reset();
             Event::Success
         }
     }

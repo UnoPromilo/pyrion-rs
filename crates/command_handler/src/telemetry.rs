@@ -1,6 +1,6 @@
 use core::sync::atomic::Ordering;
 use embassy_time::Instant;
-use logging::error_register::ErrorRegister;
+use logging::fault_register::FaultRegister;
 use transport::event::Telemetry;
 use units::si::electric_potential::volt;
 use units::si::thermodynamic_temperature::kelvin;
@@ -19,7 +19,7 @@ pub fn get_telemetry() -> Telemetry {
         power_consumption: 0.0,   // TODO add power consumption
         duty_cycle: 0.0,          // TODO add duty cycle
         uptime: Instant::now().as_millis(),
-        ongoing_errors: ErrorRegister::shared().ongoing_count() as u32,
-        resolved_errors: ErrorRegister::shared().resolved_count() as u32,
+        active_faults: FaultRegister::shared().active_count() as u32,
+        latched_faults: FaultRegister::shared().latched_count() as u32,
     }
 }

@@ -5,7 +5,7 @@ use embassy_time::Timer;
 use embassy_time::{Duration, Instant};
 #[cfg(feature = "hardware-support")]
 use hardware::BoardLeds;
-use logging::error_register::ErrorRegister;
+use logging::fault_register::FaultRegister;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct VisualState {
@@ -102,8 +102,8 @@ fn calculate_visual_state() -> VisualState {
     VisualState {
         armed: false,
         calibrating: false,
-        warning: ErrorRegister::shared().any_resolved(),
-        fault: ErrorRegister::shared().any_ongoing(),
+        warning: FaultRegister::shared().any_latched(),
+        fault: FaultRegister::shared().any_active(),
     }
 }
 

@@ -15,8 +15,8 @@ pub enum Command {
     Stop,                              // 0x02
     WriteFirmwareBlock(FirmwareBlock), // 0x10
     FinalizeFirmwareUpdate,            // 0x11
-    ReportErrors,                      // 0x71
-    ResetErrors,                       // 0x72
+    ReportFaults,                      // 0x71
+    ResetFaults,                       // 0x72
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -40,8 +40,8 @@ impl Packet for Command {
                 Ok(Command::WriteFirmwareBlock(packet))
             }
             0x11 => Ok(Command::FinalizeFirmwareUpdate),
-            0x71 => Ok(Command::ReportErrors),
-            0x72 => Ok(Command::ResetErrors),
+            0x71 => Ok(Command::ReportFaults),
+            0x72 => Ok(Command::ResetFaults),
             _ => Err(Error::CommandNotFound),
         }
     }
@@ -64,11 +64,11 @@ impl Packet for Command {
                 buffer[0] = 0x11;
                 1
             }
-            Command::ReportErrors => {
+            Command::ReportFaults => {
                 buffer[0] = 0x71;
                 1
             }
-            Command::ResetErrors => {
+            Command::ResetFaults => {
                 buffer[0] = 0x72;
                 1
             }
@@ -177,22 +177,22 @@ mod tests {
     }
 
     #[test]
-    fn report_errors_command() {
+    fn report_faults_command() {
         let mut buffer = [0; MAX_PACKET_SIZE];
-        let command = Command::ReportErrors;
+        let command = Command::ReportFaults;
         let len = command.serialize(&mut buffer);
         let result = Command::deserialize(&buffer[..len]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Command::ReportErrors);
+        assert_eq!(result.unwrap(), Command::ReportFaults);
     }
 
     #[test]
-    fn reset_errors_command() {
+    fn reset_faults_command() {
         let mut buffer = [0; MAX_PACKET_SIZE];
-        let command = Command::ResetErrors;
+        let command = Command::ResetFaults;
         let len = command.serialize(&mut buffer);
         let result = Command::deserialize(&buffer[..len]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Command::ResetErrors);
+        assert_eq!(result.unwrap(), Command::ResetFaults);
     }
 }

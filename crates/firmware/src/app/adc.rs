@@ -52,7 +52,8 @@ pub async fn task_adc(
                 v_ref: values.3[0],
                 v_bus: values.1[2],
 
-                temp_cpu: values.4[2],
+                // TODO fix temperature sensor or remove it totally
+                temp_cpu: 0,
                 temp_motor: values.1[1],
                 temp_driver: values.1[0],
 

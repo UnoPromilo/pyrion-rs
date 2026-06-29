@@ -2,7 +2,7 @@ use crate::helpers::{decode_f32, decode_u32, decode_u64};
 use crate::packet::Packet;
 use core::array::TryFromSliceError;
 use enum_iterator::Sequence;
-use logging::error_register;
+use logging::fault_register;
 
 pub mod decoder;
 pub mod encoder;
@@ -13,7 +13,7 @@ pub enum Event {
     Telemetry(Telemetry),                   // 0x02
     Success,                                // 0x03
     Failure,                                // 0x04
-    ErrorRegister(ErrorRegister),           // 0x71
+    FaultRegister(FaultRegister),           // 0x71
 }
 
 impl Packet for Event {
@@ -33,8 +33,8 @@ impl Packet for Event {
             0x03 => Ok(Event::Success),
             0x04 => Ok(Event::Failure),
             0x71 => {
-                let error_register = ErrorRegister::deserialize(&data[1..])?;
-                Ok(Event::ErrorRegister(error_register))
+                let error_register = FaultRegister::deserialize(&data[1..])?;
+                Ok(Event::FaultRegister(error_register))
             }
             _ => Err(EventDeserializationError::EventNotFound),
         }
@@ -60,9 +60,9 @@ impl Packet for Event {
                 buffer[0] = 0x04;
                 1
             }
-            Event::ErrorRegister(error_register) => {
+            Event::FaultRegister(fault_register) => {
                 buffer[0] = 0x71;
-                let content_len = error_register.serialize(&mut buffer[1..]);
+                let content_len = fault_register.serialize(&mut buffer[1..]);
                 1 + content_len
             }
         }
@@ -79,8 +79,8 @@ pub struct Telemetry {
     pub current_consumption: f32, // in amperes
     pub duty_cycle: f32,          // 0-1
     pub uptime: u64,              // milliseconds
-    pub ongoing_errors: u32,
-    pub resolved_errors: u32,
+    pub active_faults: u32,
+    pub latched_faults: u32,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -90,8 +90,8 @@ pub struct DeviceIntroduction {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct ErrorRegister {
-    pub cells: [error_register::ErrorValue; error_register::Error::CARDINALITY],
+pub struct FaultRegister {
+    pub cells: [fault_register::FaultState; fault_register::FaultType::CARDINALITY],
 }
 
 impl Telemetry {
@@ -104,8 +104,8 @@ impl Telemetry {
         buffer[20..24].copy_from_slice(&self.current_consumption.to_le_bytes());
         buffer[24..28].copy_from_slice(&self.duty_cycle.to_le_bytes());
         buffer[28..36].copy_from_slice(&self.uptime.to_le_bytes());
-        buffer[36..40].copy_from_slice(&self.ongoing_errors.to_le_bytes());
-        buffer[40..44].copy_from_slice(&self.resolved_errors.to_le_bytes());
+        buffer[36..40].copy_from_slice(&self.active_faults.to_le_bytes());
+        buffer[40..44].copy_from_slice(&self.latched_faults.to_le_bytes());
         44
     }
 
@@ -129,8 +129,8 @@ impl Telemetry {
             current_consumption,
             duty_cycle,
             uptime,
-            ongoing_errors,
-            resolved_errors,
+            active_faults: ongoing_errors,
+            latched_faults: resolved_errors,
         })
     }
 }
@@ -154,7 +154,7 @@ impl DeviceIntroduction {
     }
 }
 
-impl ErrorRegister {
+impl FaultRegister {
     pub fn serialize(&self, buffer: &mut [u8]) -> usize {
         for (i, cell) in self.cells.iter().enumerate() {
             buffer[i] = *cell as u8;
@@ -164,17 +164,17 @@ impl ErrorRegister {
     }
 
     pub fn deserialize(data: &[u8]) -> Result<Self, EventDeserializationError> {
-        if data.len() != error_register::Error::CARDINALITY {
+        if data.len() != fault_register::FaultType::CARDINALITY {
             return Err(EventDeserializationError::InvalidContent);
         }
 
-        let mut cells = [error_register::ErrorValue::Clean; error_register::Error::CARDINALITY];
+        let mut cells = [fault_register::FaultState::Clean; fault_register::FaultType::CARDINALITY];
 
         for (i, &v) in data.iter().enumerate() {
             cells[i] = match v {
-                0 => error_register::ErrorValue::Clean,
-                1 => error_register::ErrorValue::Ongoing,
-                2 => error_register::ErrorValue::Resolved,
+                0 => fault_register::FaultState::Clean,
+                1 => fault_register::FaultState::Active,
+                2 => fault_register::FaultState::Latched,
                 _ => return Err(EventDeserializationError::InvalidContent),
             };
         }
@@ -211,8 +211,8 @@ mod tests {
             current_consumption: 27.56,
             duty_cycle: 22.2222,
             uptime: u64::MAX,
-            ongoing_errors: 2,
-            resolved_errors: 4,
+            active_faults: 2,
+            latched_faults: 4,
         };
         let mut buffer = [0u8; 256];
         let length = telemetry.serialize(&mut buffer);
@@ -254,12 +254,12 @@ mod tests {
     #[test]
     pub fn error_register_event() {
         let mut buffer = [0; 100];
-        let error_register = ErrorRegister {
-            cells: [error_register::ErrorValue::Ongoing; error_register::Error::CARDINALITY],
+        let error_register = FaultRegister {
+            cells: [fault_register::FaultState::Active; fault_register::FaultType::CARDINALITY],
         };
-        let len = Event::ErrorRegister(error_register).serialize(&mut buffer);
+        let len = Event::FaultRegister(error_register).serialize(&mut buffer);
         let result = Event::deserialize(&buffer[..len]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Event::ErrorRegister(error_register));
+        assert_eq!(result.unwrap(), Event::FaultRegister(error_register));
     }
 }

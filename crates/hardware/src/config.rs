@@ -136,16 +136,17 @@ impl Board<'static> {
 
             let v_ref_int = adc4.enable_vrefint();
             let adc4_running = adc4_configured.start(
-                [(v_ref_int.degrade_adc(), SampleTime::CYCLES24_5)], // V ref int, Ch18
+                [(v_ref_int.degrade_adc(), SampleTime::CYCLES47_5)], // V ref int, Ch18
                 Irqs,
             );
 
-            let temp = adc5.enable_temperature();
+            // TODO fix temperature sensor or remove it totally 
+            //let temp = adc5.enable_temperature();
             let adc5_running = adc5_configured.start(
                 [
                     (peripherals.PA9.degrade_adc(), SampleTime::CYCLES6_5), // Current W, Ch2
                     (peripherals.PA8.degrade_adc(), SampleTime::CYCLES6_5), // Voltage W, Ch1
-                    (temp.degrade_adc(), SampleTime::CYCLES47_5),           // Cpu temp, Ch4
+                  //  (temp.degrade_adc(), SampleTime::CYCLES24_5),           // Cpu temp, Ch4
                 ],
                 Irqs,
             );
