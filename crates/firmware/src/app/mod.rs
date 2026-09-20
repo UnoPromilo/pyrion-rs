@@ -1,6 +1,7 @@
 mod adc;
 mod communication;
 mod leds;
+mod safety;
 mod shaft_position;
 mod uart;
 mod usb;

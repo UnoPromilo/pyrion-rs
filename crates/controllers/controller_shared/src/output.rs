@@ -9,8 +9,17 @@ pub trait InverterOutput {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum InhibitCause {
+    Startup,
+    Fault,
+    FirmwareUpdate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum OutputState {
-    Safe,
+    Inhibited(InhibitCause),
+    ArmedSafe,
     Enabled,
 }
 
@@ -19,6 +28,20 @@ pub enum OutputState {
 pub struct InvalidDuty {
     pub requested: RawInverterValues,
     pub max_duty: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum DriveError {
+    NotArmed,
+    InvalidDuty(InvalidDuty),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ArmError {
+    AlreadyEnabled,
+    FirmwareUpdatePending,
 }
 
 pub struct SafeOutput<D: InverterOutput> {
@@ -32,7 +55,7 @@ impl<D: InverterOutput> SafeOutput<D> {
         driver.write_phase_duties(RawInverterValues::ZERO);
         Self {
             driver,
-            state: OutputState::Safe,
+            state: OutputState::Inhibited(InhibitCause::Startup),
         }
     }
 
@@ -44,28 +67,53 @@ impl<D: InverterOutput> SafeOutput<D> {
         self.state
     }
 
-    pub fn enter_safe_state(&mut self) {
-        if self.state == OutputState::Safe {
+    pub fn arm_after_preflight(&mut self) -> Result<(), ArmError> {
+        match self.state {
+            OutputState::Inhibited(InhibitCause::FirmwareUpdate) => {
+                Err(ArmError::FirmwareUpdatePending)
+            }
+            OutputState::Inhibited(_) => {
+                self.state = OutputState::ArmedSafe;
+                Ok(())
+            }
+            OutputState::ArmedSafe => Ok(()),
+            OutputState::Enabled => Err(ArmError::AlreadyEnabled),
+        }
+    }
+
+    pub fn enter_armed_safe(&mut self) {
+        if matches!(self.state, OutputState::Inhibited(_)) {
             return;
         }
 
         self.driver.disable_outputs();
         self.driver.write_phase_duties(RawInverterValues::ZERO);
-        self.state = OutputState::Safe;
+        self.state = OutputState::ArmedSafe;
     }
 
-    pub fn drive(&mut self, duties: RawInverterValues) -> Result<(), InvalidDuty> {
+    pub fn inhibit(&mut self, cause: InhibitCause) {
+        self.driver.disable_outputs();
+        self.driver.write_phase_duties(RawInverterValues::ZERO);
+        self.state = OutputState::Inhibited(cause);
+    }
+
+    pub fn drive(&mut self, duties: RawInverterValues) -> Result<(), DriveError> {
+        if matches!(self.state, OutputState::Inhibited(_)) {
+            return Err(DriveError::NotArmed);
+        }
+
         let max_duty = self.driver.max_duty();
         if duties.u > max_duty || duties.v > max_duty || duties.w > max_duty {
-            self.enter_safe_state();
-            return Err(InvalidDuty {
+            let invalid_duty = InvalidDuty {
                 requested: duties,
                 max_duty,
-            });
+            };
+            self.inhibit(InhibitCause::Fault);
+            return Err(DriveError::InvalidDuty(invalid_duty));
         }
 
         self.driver.write_phase_duties(duties);
-        if self.state == OutputState::Safe {
+        if self.state == OutputState::ArmedSafe {
             self.driver.enable_outputs();
             self.state = OutputState::Enabled;
         }
@@ -123,7 +171,10 @@ mod tests {
     fn startup_disables_outputs_and_writes_safe_duties() {
         let output = SafeOutput::new(FakeDriver::new(1000));
 
-        assert_eq!(output.state(), OutputState::Safe);
+        assert_eq!(
+            output.state(),
+            OutputState::Inhibited(InhibitCause::Startup)
+        );
         assert_eq!(
             output.driver.operations,
             [
@@ -134,8 +185,27 @@ mod tests {
     }
 
     #[test]
-    fn first_drive_writes_fresh_duties_before_enable() {
+    fn drive_is_rejected_until_explicitly_armed() {
         let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.driver.operations.clear();
+        let duties = RawInverterValues {
+            u: 100,
+            v: 200,
+            w: 300,
+        };
+
+        assert_eq!(output.drive(duties), Err(DriveError::NotArmed));
+        assert_eq!(
+            output.state(),
+            OutputState::Inhibited(InhibitCause::Startup)
+        );
+        assert!(output.driver.operations.is_empty());
+    }
+
+    #[test]
+    fn first_armed_drive_writes_fresh_duties_before_enable() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.arm_after_preflight().unwrap();
         output.driver.operations.clear();
         let duties = RawInverterValues {
             u: 100,
@@ -155,6 +225,7 @@ mod tests {
     #[test]
     fn repeated_drive_updates_without_reenabling() {
         let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.arm_after_preflight().unwrap();
         output
             .drive(RawInverterValues {
                 u: 100,
@@ -177,6 +248,7 @@ mod tests {
     #[test]
     fn invalid_duty_disables_before_writing_safe_duties() {
         let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.arm_after_preflight().unwrap();
         output
             .drive(RawInverterValues {
                 u: 100,
@@ -192,8 +264,18 @@ mod tests {
             w: 0,
         });
 
-        assert!(result.is_err());
-        assert_eq!(output.state(), OutputState::Safe);
+        assert_eq!(
+            result,
+            Err(DriveError::InvalidDuty(InvalidDuty {
+                requested: RawInverterValues {
+                    u: 1001,
+                    v: 0,
+                    w: 0,
+                },
+                max_duty: 1000,
+            }))
+        );
+        assert_eq!(output.state(), OutputState::Inhibited(InhibitCause::Fault));
         assert_eq!(
             output.driver.operations,
             [
@@ -204,8 +286,9 @@ mod tests {
     }
 
     #[test]
-    fn drive_after_disable_writes_fresh_duties_before_reenable() {
+    fn developer_stop_keeps_the_output_armed() {
         let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.arm_after_preflight().unwrap();
         output
             .drive(RawInverterValues {
                 u: 100,
@@ -213,7 +296,8 @@ mod tests {
                 w: 300,
             })
             .unwrap();
-        output.enter_safe_state();
+        output.enter_armed_safe();
+        assert_eq!(output.state(), OutputState::ArmedSafe);
         output.driver.operations.clear();
         let duties = RawInverterValues {
             u: 300,
@@ -226,6 +310,66 @@ mod tests {
         assert_eq!(
             output.driver.operations,
             [Operation::Write(duties), Operation::Enable]
+        );
+    }
+
+    #[test]
+    fn inhibition_requires_an_explicit_rearm() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.arm_after_preflight().unwrap();
+        output
+            .drive(RawInverterValues {
+                u: 100,
+                v: 200,
+                w: 300,
+            })
+            .unwrap();
+        output.inhibit(InhibitCause::Fault);
+        output.driver.operations.clear();
+
+        assert_eq!(
+            output.drive(RawInverterValues {
+                u: 300,
+                v: 200,
+                w: 100,
+            }),
+            Err(DriveError::NotArmed)
+        );
+        assert!(output.driver.operations.is_empty());
+
+        output.arm_after_preflight().unwrap();
+        output
+            .drive(RawInverterValues {
+                u: 300,
+                v: 200,
+                w: 100,
+            })
+            .unwrap();
+        assert_eq!(
+            output.driver.operations,
+            [
+                Operation::Write(RawInverterValues {
+                    u: 300,
+                    v: 200,
+                    w: 100,
+                }),
+                Operation::Enable
+            ]
+        );
+    }
+
+    #[test]
+    fn firmware_update_inhibition_cannot_be_rearmed() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.inhibit(InhibitCause::FirmwareUpdate);
+
+        assert_eq!(
+            output.arm_after_preflight(),
+            Err(ArmError::FirmwareUpdatePending)
+        );
+        assert_eq!(
+            output.state(),
+            OutputState::Inhibited(InhibitCause::FirmwareUpdate)
         );
     }
 }

@@ -1,8 +1,12 @@
+use crate::app::communication::CONTROL_COMMAND_CHANNEL;
+use crate::app::safety;
 use crate::app::{COMMAND_CHANNEL, EVENT_CHANNEL};
 use communication::channel_types::EventSubscriber;
 use communication::packet::{Interface, Packet};
+use controller_shared::command::ControlCommand;
 use embassy_boot_stm32::{AlignedBuffer, BlockingFirmwareState, FirmwareUpdaterConfig};
 use embassy_embedded_hal::flash::partition::BlockingPartition;
+use embassy_futures::join::join3;
 use embassy_stm32::flash::{Bank1Region, Blocking, WRITE_SIZE};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Duration;
@@ -14,27 +18,23 @@ use embassy_usb::class::dfu::consts::DfuAttributes;
 use embassy_usb::driver::EndpointError;
 use hardware::usb::{UsbBuffers, WinUsbExt};
 use hardware::{BoardFlashBank1, BoardFlashBank2, BoardUsb, configure_dfu_win_usb};
-use logging::info;
+use logging::{error, info};
 use static_cell::StaticCell;
 
-type DfuStateType<'a> =
-    DfuState<DfuHandler<'a, BlockingPartition<'a, NoopRawMutex, Bank1Region<'a, Blocking>>>>;
+type FirmwareStateType<'a> =
+    BlockingFirmwareState<'a, BlockingPartition<'a, NoopRawMutex, Bank1Region<'a, Blocking>>>;
+type DfuStateType = DfuState<DfuHandler>;
 
 static ALIGNED_BUFFER: StaticCell<AlignedBuffer<WRITE_SIZE>> = StaticCell::new();
 static USB_BUFFERS: StaticCell<UsbBuffers> = StaticCell::new();
 static CDC_STATE: StaticCell<cdc_acm::State> = StaticCell::new();
-static DFU_STATE: StaticCell<DfuStateType<'static>> = StaticCell::new();
+static DFU_STATE: StaticCell<DfuStateType> = StaticCell::new();
 
-struct DfuHandler<'d, FLASH: embedded_storage::nor_flash::NorFlash> {
-    firmware_state: BlockingFirmwareState<'d, FLASH>,
-}
+struct DfuHandler;
 
-impl<FLASH: embedded_storage::nor_flash::NorFlash> Handler for DfuHandler<'_, FLASH> {
+impl Handler for DfuHandler {
     fn enter_dfu(&mut self) {
-        self.firmware_state
-            .mark_dfu()
-            .expect("Failed to mark DFU mode");
-        cortex_m::peripheral::SCB::sys_reset();
+        safety::request_dfu_shutdown();
     }
 }
 
@@ -54,7 +54,7 @@ pub async fn task_usb(
         BlockingFirmwareState::from_config(firmware_config, &mut aligned_buffer.0);
     firmware_state.mark_booted().expect("Failed to mark booted");
 
-    let dfu_handler = DfuHandler { firmware_state };
+    let dfu_handler = DfuHandler;
     let dfu_state = DFU_STATE.init(DfuState::new(
         dfu_handler,
         DfuAttributes::CAN_DOWNLOAD,
@@ -79,8 +79,35 @@ pub async fn task_usb(
     });
     let mut usb = builder.build();
 
-    embassy_futures::join::join(usb.run(), run(cdc_class)).await;
+    join3(
+        usb.run(),
+        run(cdc_class),
+        enter_dfu_when_safe(firmware_state),
+    )
+    .await;
 }
+
+async fn enter_dfu_when_safe(mut firmware_state: FirmwareStateType<'_>) {
+    loop {
+        let request_id = safety::wait_for_dfu_shutdown_request().await;
+        let shutdown = async {
+            CONTROL_COMMAND_CHANNEL
+                .send(ControlCommand::InhibitForDfu { request_id })
+                .await;
+            safety::wait_for_dfu_output_inhibited(request_id).await;
+        };
+        if embassy_time::with_timeout(Duration::from_millis(100), shutdown)
+            .await
+            .is_err()
+        {
+            error!("DFU shutdown acknowledgement timed out");
+            continue;
+        }
+        firmware_state.mark_dfu().expect("Failed to mark DFU mode");
+        cortex_m::peripheral::SCB::sys_reset();
+    }
+}
+
 async fn run<'a>(cdc_class: CdcAcmClass<'a, BoardUsb<'a>>) {
     let mut rx_subscriber = EVENT_CHANNEL.subscriber().expect("Can't subscribe to usb");
     let (mut tx, mut rx) = cdc_class.split();

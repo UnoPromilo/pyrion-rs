@@ -1,6 +1,7 @@
 use crate::app::communication::CONTROL_COMMAND_CHANNEL;
+use crate::app::safety;
 use controller_shared::command::ControlCommand;
-use controller_shared::output::{InverterOutput, SafeOutput};
+use controller_shared::output::{InhibitCause, InverterOutput, SafeOutput};
 use controller_shared::strategy::ControlStrategy;
 use controller_shared::{
     ControlFault, ControlOutput, RawInverterValues, RawSnapshot, control_step,
@@ -44,19 +45,23 @@ pub async fn task_adc(adc: BoardAdc<'static>, inverter: BoardInverter<'static>) 
         );
 
         let requested_output = match select(CONTROL_COMMAND_CHANNEL.receive(), adc_read).await {
-            Either::First(ControlCommand::DisableMotor) => {
+            Either::First(ControlCommand::Stop) => {
                 strategy = ControlStrategy::Disabled;
-                ControlOutput::Safe
+                RequestedOutput::ArmedSafe
+            }
+            Either::First(ControlCommand::InhibitForDfu { request_id }) => {
+                strategy = ControlStrategy::Disabled;
+                RequestedOutput::DfuInhibited { request_id }
             }
             Either::Second(Err(_)) => {
                 faults.latch(FaultType::AdcTimeout);
                 strategy = ControlStrategy::Disabled;
-                ControlOutput::Safe
+                RequestedOutput::Inhibited(InhibitCause::Fault)
             }
             Either::Second(Ok(values)) => {
                 if faults.any_active() || faults.any_latched() {
                     strategy = ControlStrategy::Disabled;
-                    ControlOutput::Safe
+                    RequestedOutput::Inhibited(InhibitCause::Fault)
                 } else {
                     let raw_reading = RawSnapshot {
                         i_u: values.0[0],
@@ -80,26 +85,36 @@ pub async fn task_adc(adc: BoardAdc<'static>, inverter: BoardInverter<'static>) 
                         max_duty,
                         angle: controller_state.raw_angle.load(Ordering::Relaxed),
                     };
-                    control_step(&raw_reading, &mut strategy)
+                    match control_step(&raw_reading, &mut strategy) {
+                        ControlOutput::Safe => RequestedOutput::ArmedSafe,
+                        ControlOutput::Drive(values) => RequestedOutput::Drive(values),
+                        ControlOutput::Fault(fault) => RequestedOutput::Fault(fault),
+                    }
                 }
             }
         };
 
         match requested_output {
-            ControlOutput::Safe => inverter.enter_safe_state(),
-            ControlOutput::Drive(values) => {
+            RequestedOutput::ArmedSafe => inverter.enter_armed_safe(),
+            RequestedOutput::Inhibited(cause) => inverter.inhibit(cause),
+            RequestedOutput::DfuInhibited { request_id } => {
+                inverter.inhibit(InhibitCause::FirmwareUpdate);
+                safety::acknowledge_dfu_output_inhibited(request_id);
+            }
+            RequestedOutput::Drive(values) => {
                 if inverter.drive(values).is_err() {
                     faults.latch(FaultType::InvalidControllerOutput);
                     strategy = ControlStrategy::Disabled;
+                    inverter.inhibit(InhibitCause::Fault);
                 }
             }
-            ControlOutput::Fault(fault) => {
+            RequestedOutput::Fault(fault) => {
                 faults.latch(match fault {
                     ControlFault::InvalidMeasurement => FaultType::InvalidMeasurement,
                     ControlFault::InvalidControllerOutput => FaultType::InvalidControllerOutput,
                 });
                 strategy = ControlStrategy::Disabled;
-                inverter.enter_safe_state();
+                inverter.inhibit(InhibitCause::Fault);
             }
         }
 
@@ -109,6 +124,14 @@ pub async fn task_adc(adc: BoardAdc<'static>, inverter: BoardInverter<'static>) 
             .last_foc_loop_time_us
             .store(elapsed_us, Ordering::Relaxed);
     }
+}
+
+enum RequestedOutput {
+    ArmedSafe,
+    Inhibited(InhibitCause),
+    DfuInhibited { request_id: u32 },
+    Drive(RawInverterValues),
+    Fault(ControlFault),
 }
 
 struct BoardOutput(BoardInverter<'static>);

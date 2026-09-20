@@ -20,7 +20,7 @@ pub async fn execute_command(
                 firmware_version: [version_major, version_minor, version_patch],
             })
         }
-        Command::Stop => match control_command_channel.try_send(ControlCommand::DisableMotor) {
+        Command::Stop => match control_command_channel.try_send(ControlCommand::Stop) {
             Ok(_) => Event::Success,
             Err(_) => Event::Failure,
         },

@@ -27,11 +27,11 @@ information.
 `pyrionctl` is a gRPC-only development client. With the server running:
 
 ```bash
-cargo run -p pyrion-cli -- devices list
-cargo run -p pyrion-cli -- device connect
+./pyrion.sh pyrionctl devices list
+./pyrion.sh pyrionctl device info
 ```
 
-The connect command discovers the only attached device, opens a session, reads
+The info command discovers the only attached device, opens a short-lived session, reads
 its firmware version and UID, and disconnects. Pass `--connection` when multiple
 devices are available and `--output json` for automation.
 

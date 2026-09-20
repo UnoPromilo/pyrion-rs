@@ -1,5 +1,4 @@
 #![no_std]
-#![macro_use]
 
 #[cfg(feature = "errors")]
 pub mod fault_register;

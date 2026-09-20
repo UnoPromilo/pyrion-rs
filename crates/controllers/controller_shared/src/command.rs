@@ -4,5 +4,6 @@ use embassy_sync::channel::Channel;
 pub type ControlCommandChannel = Channel<CriticalSectionRawMutex, ControlCommand, 10>;
 
 pub enum ControlCommand {
-    DisableMotor,
+    Stop,
+    InhibitForDfu { request_id: u32 },
 }
