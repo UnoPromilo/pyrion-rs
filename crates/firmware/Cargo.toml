@@ -11,6 +11,50 @@ test = false
 doctest = false
 bench = false
 
+[features]
+mcu-core = []
+board-pyrion-ovo = [
+    "hardware/board-pyrion-ovo",
+    "cap-shunt-three",
+    "cap-external-i2c",
+    "cap-external-spi",
+    "cap-uart",
+    "cap-can",
+    "cap-drv8301",
+    "cap-hall",
+    "cap-voltage-filter",
+    "cap-current-filter",
+    "cap-adc-phase-voltage",
+    "cap-adc-bus-voltage",
+    "cap-adc-motor-temperature",
+    "cap-adc-mosfet-temperature",
+    "cap-adc-cpu-temperature",
+    "cap-adc-analog-input",
+]
+board-pyrion-nullo = [
+    "hardware/board-pyrion-nullo",
+    "cap-shunt-two",
+]
+
+cap-external-i2c = ["hardware/cap-external-i2c", "user-config/cap-external-i2c"]
+cap-external-spi = ["hardware/cap-external-spi"]
+cap-uart = ["hardware/cap-uart"]
+cap-can = ["hardware/cap-can"]
+cap-drv8301 = ["hardware/cap-drv8301"]
+cap-hall = ["hardware/cap-hall"]
+cap-voltage-filter = ["hardware/cap-voltage-filter"]
+cap-current-filter = ["hardware/cap-current-filter"]
+
+cap-shunt-two = ["hardware/cap-shunt-two"]
+cap-shunt-three = ["hardware/cap-shunt-three"]
+
+cap-adc-phase-voltage = ["hardware/cap-adc-phase-voltage"]
+cap-adc-bus-voltage = ["hardware/cap-adc-bus-voltage"]
+cap-adc-motor-temperature = ["hardware/cap-adc-motor-temperature"]
+cap-adc-mosfet-temperature = ["hardware/cap-adc-mosfet-temperature"]
+cap-adc-cpu-temperature = ["hardware/cap-adc-cpu-temperature"]
+cap-adc-analog-input = ["hardware/cap-adc-analog-input"]
+
 [dependencies]
 embassy-boot-stm32 = { version = "0.8.0" }
 embassy-embedded-hal = { version = "0.6.0", features = ["defmt"] }
@@ -31,7 +75,7 @@ embedded-storage = { version = "0.3.1" }
 
 as5600 = { path = "../drivers/as5600", features = ["defmt"] }
 controller-shared = { path = "../controllers/controller_shared", features = ["defmt"] }
-hardware = { path = "../hardware", features = ["full", "defmt"] }
+hardware = { path = "../hardware", features = ["defmt"] }
 led-manager = { path = "../led_manager", features = ["hardware-support"] }
 logging = { path = "../utils/logging", features = ["errors", "freq-meter"] }
 transport = { path = "../transport", features = ["defmt"] }

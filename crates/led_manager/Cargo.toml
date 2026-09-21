@@ -12,4 +12,4 @@ embassy-time = { version = "0.5.1" }
 controller-shared = { path = "../controllers/controller_shared" }
 logging = { path = "../utils/logging", features = ["errors"] }
 
-hardware = { path = "../hardware", optional = true}
+hardware = { path = "../hardware", optional = true, default-features = false }

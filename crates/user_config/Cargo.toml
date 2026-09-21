@@ -5,6 +5,7 @@ edition = "2024"
 
 [features]
 defmt = ["dep:defmt"]
+cap-external-i2c = []
 
 [dependencies]
 embassy-stm32 = { version = "0.6.0", features = ["stm32g474re", "time"] }

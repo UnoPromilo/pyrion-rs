@@ -1399,11 +1399,13 @@ version = "0.1.0"
 dependencies = [
  "adc",
  "crc-engine",
+ "defmt 1.1.1",
  "embassy-stm32",
  "embassy-sync",
  "embassy-usb",
  "inverter",
  "static_cell",
+ "units",
  "user-config",
 ]
 

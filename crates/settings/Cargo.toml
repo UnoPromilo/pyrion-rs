@@ -7,4 +7,4 @@ edition = "2024"
 hardware-support = ["dep:hardware"]
 
 [dependencies]
-hardware = { path = "../hardware", optional = true }
+hardware = { path = "../hardware", optional = true, default-features = false }

@@ -45,6 +45,27 @@ ACTION_FLASH=""
 ACTION_DFU=""
 RUN_SERVER=0
 ATTACH_LOGS=0
+BOARD=""
+
+VALID_BOARDS=("ovo" "nullo")
+FW_FEATURE_ARGS=()
+
+validate_board() {
+    local board=$1
+    for valid in "${VALID_BOARDS[@]}"; do
+        if [[ "$board" == "$valid" ]]; then
+            return 0
+        fi
+    done
+    error "Unknown board '$board'. Valid boards: ${VALID_BOARDS[*]}."
+}
+
+build_firmware_feature_args() {
+    FW_FEATURE_ARGS=()
+    if [[ -n "$BOARD" ]]; then
+        FW_FEATURE_ARGS=("--no-default-features" "--features" "board-pyrion-$BOARD")
+    fi
+}
 
 check_deps() {
     local missing_deps=0
@@ -79,6 +100,10 @@ Commands:
   pyrionctl [ARGS...] Run pyrionctl; all remaining arguments are forwarded
   logs                Attach to firmware logs using probe-rs
   help, -h, --help    Print this help message
+
+Options:
+  --board NAME        Board profile for firmware/dfu (default: firmware default).
+                      Valid: ${VALID_BOARDS[*]}. Ignored by the bootloader.
 EOF
 }
 
@@ -104,9 +129,10 @@ do_flash() {
         success "Bootloader flashed."
     fi
     if [[ "$target" == "firmware" ]]; then
-        info "Flashing firmware via probe-rs..."
+        build_firmware_feature_args
+        info "Flashing firmware${BOARD:+ (board: $BOARD)} via probe-rs..."
         pushd "crates/firmware" > /dev/null
-          cargo run --release
+          cargo run --release ${FW_FEATURE_ARGS[@]+"${FW_FEATURE_ARGS[@]}"}
         popd > /dev/null
         success "Firmware flashed."
         info "Goodbye!"
@@ -114,13 +140,14 @@ do_flash() {
 }
 
 do_dfu() {
+    build_firmware_feature_args
     pushd "crates/firmware" > /dev/null
-      info "Building 'firmware' for DFU..."
-      cargo build --release
+      info "Building 'firmware'${BOARD:+ (board: $BOARD)} for DFU..."
+      cargo build --release ${FW_FEATURE_ARGS[@]+"${FW_FEATURE_ARGS[@]}"}
 
       local bin_out="firmware.bin"
       info "Generating raw binary ($bin_out)..."
-      cargo objcopy --release -- -O binary "$bin_out"
+      cargo objcopy --release ${FW_FEATURE_ARGS[@]+"${FW_FEATURE_ARGS[@]}"} -- -O binary "$bin_out"
 
       local bin_size
       local max_size
@@ -176,6 +203,19 @@ while [[ $# -gt 0 ]]; do
             ;;
         logs)
             ATTACH_LOGS=1
+            shift
+            ;;
+        --board)
+            if [[ -z "${2:-}" ]]; then
+                error "--board requires a value. Valid: ${VALID_BOARDS[*]}."
+            fi
+            validate_board "$2"
+            BOARD="$2"
+            shift 2
+            ;;
+        --board=*)
+            BOARD="${1#*=}"
+            validate_board "$BOARD"
             shift
             ;;
         -h|--help|help)

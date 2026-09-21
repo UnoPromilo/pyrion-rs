@@ -1,25 +1,22 @@
-#[cfg(feature = "full")]
+#[cfg(feature = "board")]
 use embassy_stm32::peripherals::{
     ADC1, ADC2, ADC3, ADC4, ADC5, DMA1_CH1, DMA1_CH2, DMA1_CH3, DMA1_CH4, DMA1_CH5, DMA1_CH6,
-    DMA1_CH7, DMA1_CH8, DMA2_CH1, DMA2_CH2, FDCAN2, I2C3, I2C4, USART1, USB,
+    DMA1_CH7, DMA1_CH8, DMA2_CH1, DMA2_CH2, FDCAN2, I2C4, USART1, USB,
 };
-#[cfg(feature = "full")]
+#[cfg(feature = "board")]
 use embassy_stm32::{bind_interrupts, can, dma, i2c, usart, usb};
 
-#[cfg(not(feature = "full"))]
+#[cfg(not(feature = "board"))]
 use embassy_stm32::peripherals::USB;
-#[cfg(not(feature = "full"))]
+#[cfg(not(feature = "board"))]
 use embassy_stm32::{bind_interrupts, usb};
 
-#[cfg(feature = "full")]
+#[cfg(feature = "board")]
 bind_interrupts!(pub struct Irqs{
     ADC1_2 => adc::MultiInterruptHandler<ADC1, ADC2>;
     ADC3 => adc::SingleInterruptHandler<ADC3>;
     ADC4 => adc::SingleInterruptHandler<ADC4>;
     ADC5 => adc::SingleInterruptHandler<ADC5>;
-
-    I2C3_EV => i2c::EventInterruptHandler<I2C3>;
-    I2C3_ER => i2c::ErrorInterruptHandler<I2C3>;
 
     I2C4_EV => i2c::EventInterruptHandler<I2C4>;
     I2C4_ER => i2c::ErrorInterruptHandler<I2C4>;
@@ -44,7 +41,7 @@ bind_interrupts!(pub struct Irqs{
     DMA2_CHANNEL2 => dma::InterruptHandler<DMA2_CH2>;
 });
 
-#[cfg(not(feature = "full"))]
+#[cfg(not(feature = "board"))]
 bind_interrupts!(pub struct Irqs{
     USB_LP => usb::InterruptHandler<USB>;
 });

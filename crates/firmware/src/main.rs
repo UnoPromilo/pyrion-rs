@@ -19,6 +19,12 @@ use defmt_rtt as _;
 use hardware::usb::get_usb_config;
 use hardware::{BoardFlashBank1, BoardFlashBank2, BoardSerialNumber};
 
+hardware::exactly_one_of!(
+    "firmware image must select exactly one board-* feature",
+    "board-pyrion-ovo",
+    "board-pyrion-nullo",
+);
+
 static EXECUTOR_HIGH: InterruptExecutor = InterruptExecutor::new();
 static EXECUTOR_MED: InterruptExecutor = InterruptExecutor::new();
 static EXECUTOR_LOW: StaticCell<Executor> = StaticCell::new();
@@ -53,12 +59,18 @@ fn main() -> ! {
     high_priority_spawner.spawn(app::task_adc(board.adc, board.inverter).unwrap());
 
     interrupt::UART5.set_priority(Priority::P7);
-    let medium_priority_spawner = EXECUTOR_MED.start(interrupt::UART5);
-    medium_priority_spawner.spawn(app::task_shaft_position(board.ext_i2c, user_config).unwrap());
+
+    #[cfg(feature = "cap-external-i2c")]
+    {
+        let medium_priority_spawner = EXECUTOR_MED.start(interrupt::UART5);
+        medium_priority_spawner
+            .spawn(app::task_shaft_position(board.ext_i2c, user_config).unwrap());
+    }
 
     let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
     low_priority_executor.run(|low_priority_spawner| {
         low_priority_spawner.spawn(app::task_communication(board.crc).unwrap());
+        #[cfg(feature = "cap-uart")]
         low_priority_spawner.spawn(app::task_uart(board.uart).unwrap());
         low_priority_spawner.spawn(app::task_leds(board.leds).unwrap());
         low_priority_spawner

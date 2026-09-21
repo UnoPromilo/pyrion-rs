@@ -16,7 +16,8 @@ pub struct UserConfig {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ShaftPositionDetector {
-    None, // TODO is it valid?
+    OpenLoop, 
+    #[cfg(feature = "cap-external-i2c")]
     AS5600,
 }
 
@@ -31,7 +32,7 @@ impl Default for UserConfig {
             external_spi_frequency: mhz(1),
             can_bitrate: 250_000,
             fd_can_bitrate: 250_000,
-            shaft_position_detector: ShaftPositionDetector::AS5600,
+            shaft_position_detector: ShaftPositionDetector::OpenLoop,
         }
     }
 }

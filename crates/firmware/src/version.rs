@@ -1,6 +1,8 @@
+use hardware::BOARD_ID;
 use logging::info;
 
 pub fn populate_version() {
+    info!("{}", BOARD_ID);
     let version = parse_version(env!("CARGO_PKG_VERSION"));
     info!("Version: {}.{}.{}", version[0], version[1], version[2]);
     let controller_state = controller_shared::state::state();
