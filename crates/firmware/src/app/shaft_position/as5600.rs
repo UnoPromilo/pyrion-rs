@@ -1,12 +1,12 @@
-use as5600::AS5600;
 use core::sync::atomic::Ordering;
+use drivers::as5600::{AS5600, Config, Error};
 use embassy_time::{Duration, Timer};
 use hardware::BoardI2c;
 use logging::fault_register::FaultRegister;
 use logging::{FreqMeter, error, fault_register};
 
 pub async fn task_as5600(ext_i2c: BoardI2c<'static>) {
-    let config = as5600::Config::default();
+    let config = Config::default();
     let mut as5600 = AS5600::new(ext_i2c, config);
     loop {
         let error = run_until_failure(&mut as5600).await.unwrap_err();
@@ -16,7 +16,7 @@ pub async fn task_as5600(ext_i2c: BoardI2c<'static>) {
     }
 }
 
-async fn run_until_failure<'a>(as5600: &mut AS5600<BoardI2c<'a>>) -> Result<(), as5600::Error> {
+async fn run_until_failure<'a>(as5600: &mut AS5600<BoardI2c<'a>>) -> Result<(), Error> {
     let state = controller_shared::state::state();
     as5600.write_config().await?;
     let mut freq_meter = FreqMeter::named("ENC");

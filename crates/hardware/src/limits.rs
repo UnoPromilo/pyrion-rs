@@ -1,7 +1,7 @@
 use units::{ElectricCurrent, ElectricPotential};
 
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug, defmt::Format)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum BoardId {
     PyrionOvo,
     PyrionNullo,

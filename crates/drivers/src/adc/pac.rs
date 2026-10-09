@@ -1,5 +1,5 @@
-use crate::pac_instance::PacInstance;
-use crate::{DataAlignment, GainCompensation, OversamplingRatio, OversamplingShift};
+use crate::adc::pac_instance::PacInstance;
+use crate::adc::{DataAlignment, GainCompensation, OversamplingRatio, OversamplingShift};
 use embassy_time::{Duration, block_for};
 use stm32_metapac::adc::vals::{Adcaldif, Difsel, Dmacfg, Exten, Ovrmod, Res, Rovsm, Trovs};
 

@@ -1,9 +1,9 @@
-use crate::pac::RegManipulations;
-use crate::pac_instance::PacInstance;
-use crate::prescaler::Prescaler;
-use crate::state::WithState;
-use crate::trigger_edge::ExtTriggerEdge;
-use crate::{Config, injected};
+use crate::adc::pac::RegManipulations;
+use crate::adc::pac_instance::PacInstance;
+use crate::adc::prescaler::Prescaler;
+use crate::adc::state::WithState;
+use crate::adc::trigger_edge::ExtTriggerEdge;
+use crate::adc::{Config, injected};
 use core::marker::PhantomData;
 use embassy_stm32::adc::{Temperature, Vbat, VrefInt};
 use embassy_stm32::time::Hertz;

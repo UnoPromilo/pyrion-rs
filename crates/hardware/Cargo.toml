@@ -6,21 +6,36 @@ edition = "2024"
 [features]
 default = []
 mcu-core = []
-board = ["dep:units", "dep:adc", "dep:crc-engine", "dep:inverter", "dep:user-config"]
-board-pyrion-ovo = [ "board" ]
-board-pyrion-nullo = [ "board" ]
+board = ["dep:units", "dep:drivers", "drivers/adc",  "dep:crc-engine", "dep:user-config"]
+board-pyrion-ovo = [
+    "board",
+    "cap-external-i2c",
+    "cap-external-spi",
+    "cap-uart",
+    "cap-can",
+    "cap-voltage-filter",
+    "cap-current-filter",
+    "cap-drv8301",
+    "cap-six-pwm-tim1",
+    "cap-drv8301-dtc-10k",
+]
+board-pyrion-nullo = ["board", "cap-drv8301", "cap-six-pwm-tim1", "cap-drv8301-dtc-20k"]
 
 cap-external-i2c = []
 cap-external-spi = []
 cap-uart = []
 cap-can = []
-cap-drv8301 = []
+cap-drv8301 = ["drivers/drv8301"]
 cap-hall = []
 cap-voltage-filter = []
 cap-current-filter = []
+cap-six-pwm-tim1 = ["drivers/six-pwm-tim1"]
 
 cap-shunt-two = []
 cap-shunt-three = []
+
+cap-drv8301-dtc-10k = ["drivers/drv8301-dtc-10k"]
+cap-drv8301-dtc-20k = ["drivers/drv8301-dtc-20k"]
 
 cap-adc-phase-voltage = []
 cap-adc-bus-voltage = []
@@ -29,7 +44,7 @@ cap-adc-mosfet-temperature = []
 cap-adc-cpu-temperature = []
 cap-adc-analog-input = []
 
-defmt = ["embassy-stm32/defmt", "embassy-sync/defmt", "adc?/defmt", "crc-engine?/defmt", "inverter?/defmt", "user-config?/defmt", "embassy-usb/defmt", "dep:defmt"]
+defmt = ["embassy-stm32/defmt", "embassy-sync/defmt", "drivers?/defmt", "crc-engine?/defmt", "user-config?/defmt", "embassy-usb/defmt", "dep:defmt"]
 
 [dependencies]
 embassy-stm32 = { version = "0.6.0", features = ["time", "time-driver-any", "stm32g474re", "dual-bank", "unstable-pac", "exti"] }
@@ -38,8 +53,7 @@ embassy-usb = { version = "0.6.0" }
 static_cell = { version = "2.1.1" }
 defmt = {version = "1.1.1", optional = true}
 
-adc = { path = "../drivers/adc", optional = true }
+drivers = { path = "../drivers", optional = true }
 crc-engine = { path = "../utils/crc_engine", features = ["hardware"], optional = true }
-inverter = { path = "../drivers/inverter", optional = true }
 units = { path = "../utils/units", optional = true }
 user-config = { path = "../user_config", optional = true }

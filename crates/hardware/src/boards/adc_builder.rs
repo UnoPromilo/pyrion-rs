@@ -1,8 +1,8 @@
 use crate::BoardAdc;
 use crate::irqs::Irqs;
-use adc::Adc;
-use adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
-use adc::trigger_edge::ExtTriggerEdge;
+use drivers::adc::Adc;
+use drivers::adc::injected::{ExtTriggerSourceADC12, ExtTriggerSourceADC345};
+use drivers::adc::trigger_edge::ExtTriggerEdge;
 use embassy_stm32::Peri;
 use embassy_stm32::adc::{AdcChannel, SampleTime};
 use embassy_stm32::peripherals::{
@@ -27,7 +27,7 @@ pub(crate) fn build_adc(
     i_w: Peri<'static, PA9>,
     v_w: Peri<'static, PA8>,
 ) -> BoardAdc<'static> {
-    let adc_config = adc::Config::default();
+    let adc_config = drivers::adc::Config::default();
     let adc1 = Adc::new(adc1, adc_config);
     let adc2 = Adc::new(adc2, adc_config);
     let adc3 = Adc::new(adc3, adc_config);
@@ -38,12 +38,12 @@ pub(crate) fn build_adc(
         adc1.configure_injected_ext_trigger(ExtTriggerSourceADC12::T1_TRGO, ExtTriggerEdge::Rising);
     let (adc2, adc2_configured) =
         adc2.configure_injected_ext_trigger(ExtTriggerSourceADC12::T1_TRGO, ExtTriggerEdge::Rising);
-    let (adc3, adc3_configured) =
-        adc3.configure_injected_ext_trigger(ExtTriggerSourceADC345::T1_TRGO, ExtTriggerEdge::Rising);
-    let (adc4, adc4_configured) =
-        adc4.configure_injected_ext_trigger(ExtTriggerSourceADC345::T1_TRGO, ExtTriggerEdge::Rising);
-    let (adc5, adc5_configured) =
-        adc5.configure_injected_ext_trigger(ExtTriggerSourceADC345::T1_TRGO, ExtTriggerEdge::Rising);
+    let (adc3, adc3_configured) = adc3
+        .configure_injected_ext_trigger(ExtTriggerSourceADC345::T1_TRGO, ExtTriggerEdge::Rising);
+    let (adc4, adc4_configured) = adc4
+        .configure_injected_ext_trigger(ExtTriggerSourceADC345::T1_TRGO, ExtTriggerEdge::Rising);
+    let (adc5, adc5_configured) = adc5
+        .configure_injected_ext_trigger(ExtTriggerSourceADC345::T1_TRGO, ExtTriggerEdge::Rising);
 
     let adc1_running = adc1_configured.start(
         [

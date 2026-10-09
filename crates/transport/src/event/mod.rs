@@ -262,4 +262,58 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), Event::FaultRegister(error_register));
     }
+
+    #[test]
+    fn gate_driver_startup_uses_appended_position_in_fault_event() {
+        let mut buffer = [0; 100];
+        let mut cells = [fault_register::FaultState::Clean; fault_register::FaultType::CARDINALITY];
+        cells[fault_register::FaultType::GateDriverStartup as usize] =
+            fault_register::FaultState::Active;
+        let event = Event::FaultRegister(FaultRegister { cells });
+
+        let len = event.serialize(&mut buffer);
+        assert_eq!(len, 7);
+        assert_eq!(&buffer[..len], &[0x71, 0, 0, 0, 0, 1, 0]);
+        assert_eq!(Event::deserialize(&buffer[..len]), Ok(event));
+        assert_eq!(
+            Event::deserialize(&buffer[..len - 1]),
+            Err(EventDeserializationError::InvalidContent)
+        );
+        assert_eq!(
+            Event::deserialize(&buffer[..len + 1]),
+            Err(EventDeserializationError::InvalidContent)
+        );
+        buffer[5] = 3;
+        assert_eq!(
+            Event::deserialize(&buffer[..len]),
+            Err(EventDeserializationError::InvalidContent)
+        );
+    }
+
+    #[test]
+    fn gate_driver_runtime_uses_distinct_appended_position_in_fault_event() {
+        let mut buffer = [0; 100];
+        let mut cells = [fault_register::FaultState::Clean; fault_register::FaultType::CARDINALITY];
+        cells[fault_register::FaultType::GateDriverRuntime as usize] =
+            fault_register::FaultState::Active;
+        let event = Event::FaultRegister(FaultRegister { cells });
+
+        let len = event.serialize(&mut buffer);
+        assert_eq!(len, 7);
+        assert_eq!(&buffer[..len], &[0x71, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(Event::deserialize(&buffer[..len]), Ok(event));
+        assert_eq!(
+            Event::deserialize(&buffer[..len - 1]),
+            Err(EventDeserializationError::InvalidContent)
+        );
+        assert_eq!(
+            Event::deserialize(&buffer[..len + 1]),
+            Err(EventDeserializationError::InvalidContent)
+        );
+        buffer[len - 1] = 3;
+        assert_eq!(
+            Event::deserialize(&buffer[..len]),
+            Err(EventDeserializationError::InvalidContent)
+        );
+    }
 }

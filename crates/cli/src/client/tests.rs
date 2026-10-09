@@ -122,6 +122,14 @@ impl DeviceSession for FakePyrion {
                                 r#type: FaultType::AdcTimeout.into(),
                                 state: FaultState::Latched.into(),
                             },
+                            FaultEntry {
+                                r#type: FaultType::GateDriverStartup.into(),
+                                state: FaultState::Active.into(),
+                            },
+                            FaultEntry {
+                                r#type: FaultType::GateDriverRuntime.into(),
+                                state: FaultState::Active.into(),
+                            },
                         ],
                     })),
                 }),
@@ -197,6 +205,14 @@ async fn discovers_connects_identifies_and_disconnects() {
             FaultSummary {
                 fault_type: "ADC_TIMEOUT".to_owned(),
                 state: "LATCHED".to_owned(),
+            },
+            FaultSummary {
+                fault_type: "GATE_DRIVER_STARTUP".to_owned(),
+                state: "ACTIVE".to_owned(),
+            },
+            FaultSummary {
+                fault_type: "GATE_DRIVER_RUNTIME".to_owned(),
+                state: "ACTIVE".to_owned(),
             },
         ]
     );

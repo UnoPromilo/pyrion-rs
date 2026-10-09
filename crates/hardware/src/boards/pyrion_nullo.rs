@@ -4,11 +4,12 @@ use crate::serial_number::get_serial_number_as_hex;
 use crate::{Board, BoardLeds};
 use core::cell::RefCell;
 use crc_engine::hardware::HardwareCrcEngine;
+use drivers::{Drv8301Stage, SixPwmTim1};
+use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::flash::Flash;
-use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_stm32::usb;
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+use embassy_stm32::{spi, usb};
 use embassy_sync::blocking_mutex::Mutex;
-use inverter::Inverter;
 use units::{ElectricCurrent, ElectricPotential, F32UnitType};
 use user_config::UserConfig;
 
@@ -32,7 +33,7 @@ impl Board<'static> {
             p.PB0, p.PB1, p.PA9, p.PA8,
         );
 
-        let inverter = Inverter::new(
+        let pwm = SixPwmTim1::new(
             p.TIM1,
             p.PC0,
             p.PB13,
@@ -43,9 +44,17 @@ impl Board<'static> {
             user_config.pwm_frequency,
         );
 
-
-
-
+        let power_stage = {
+            let config = super::drv8301_spi_config();
+            let bus = spi::Spi::new(
+                p.SPI1, p.PA5, p.PA7, p.PA6, p.DMA2_CH1, p.DMA2_CH2, Irqs, config,
+            );
+            let cs = Output::new(p.PA4, Level::High, Speed::High);
+            let en_gate = Output::new(p.PA0, Level::Low, Speed::Low);
+            // EXTI owns PB12 in input mode; this does not configure TIM1 BKIN (AF6).
+            let nfault = ExtiInput::new(p.PB12, p.EXTI12, Pull::Up, Irqs);
+            Drv8301Stage::new(pwm, bus, cs, en_gate, nfault)
+        };
 
         let usb = usb::Driver::new(p.USB, Irqs, p.PA12, p.PA11);
 
@@ -63,7 +72,7 @@ impl Board<'static> {
 
         Self {
             adc,
-            inverter,
+            power_stage,
             crc,
             flash_bank1,
             flash_bank2,

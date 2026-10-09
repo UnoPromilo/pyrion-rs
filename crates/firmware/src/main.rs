@@ -53,10 +53,11 @@ fn main() -> ! {
     let flash_bank2 = FLASH_BANK2.init(board.flash_bank2);
 
     let usb_config = get_usb_config(serial_number);
+    let (fast_output, slow_control) = board.power_stage.split();
 
     interrupt::UART4.set_priority(Priority::P6);
     let high_priority_spawner = EXECUTOR_HIGH.start(interrupt::UART4);
-    high_priority_spawner.spawn(app::task_adc(board.adc, board.inverter).unwrap());
+    high_priority_spawner.spawn(app::task_adc(board.adc, fast_output).unwrap());
 
     interrupt::UART5.set_priority(Priority::P7);
 
@@ -69,6 +70,7 @@ fn main() -> ! {
 
     let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
     low_priority_executor.run(|low_priority_spawner| {
+        low_priority_spawner.spawn(app::task_gate_driver(slow_control).unwrap());
         low_priority_spawner.spawn(app::task_communication(board.crc).unwrap());
         #[cfg(feature = "cap-uart")]
         low_priority_spawner.spawn(app::task_uart(board.uart).unwrap());

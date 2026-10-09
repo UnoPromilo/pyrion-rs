@@ -1,6 +1,6 @@
-use crate::config::Config;
-use crate::error::Error;
-use crate::registers::*;
+use crate::as5600::config::Config;
+use crate::as5600::error::Error;
+use crate::as5600::registers::*;
 use embedded_hal_async::i2c;
 use logging::debug;
 

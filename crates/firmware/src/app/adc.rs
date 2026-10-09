@@ -1,7 +1,8 @@
 use crate::app::communication::CONTROL_COMMAND_CHANNEL;
+use crate::app::power_stage::{self, BoardOutput, UncheckedOutput};
 use crate::app::safety;
 use controller_shared::command::ControlCommand;
-use controller_shared::output::{InhibitCause, InverterOutput, SafeOutput};
+use controller_shared::output::{InhibitCause, SafeOutput};
 use controller_shared::strategy::ControlStrategy;
 use controller_shared::{
     ControlFault, ControlOutput, RawInverterValues, RawSnapshot, control_step,
@@ -10,18 +11,18 @@ use core::sync::atomic::Ordering;
 use embassy_futures::join::join5;
 use embassy_futures::select::{Either, select};
 use embassy_time::{Duration, Instant, with_timeout};
-use hardware::{BoardAdc, BoardInverter};
+use hardware::BoardAdc;
 use logging::FreqMeter;
 use logging::fault_register::{FaultRegister, FaultType};
 
 #[embassy_executor::task]
-pub async fn task_adc(adc: BoardAdc<'static>, inverter: BoardInverter<'static>) {
+pub async fn task_adc(adc: BoardAdc<'static>, pwm: UncheckedOutput) {
     let adc_1 = adc.adc1_running;
     let adc_2 = adc.adc2_running;
     let adc_3 = adc.adc3_running;
     let adc_4 = adc.adc4_running;
     let adc_5 = adc.adc5_running;
-    let mut inverter = SafeOutput::new(BoardOutput(inverter));
+    let mut inverter = SafeOutput::new(BoardOutput::new(pwm));
     let max_duty = inverter.max_duty();
     let controller_state = controller_shared::state::state();
     let faults = FaultRegister::shared();
@@ -44,12 +45,24 @@ pub async fn task_adc(adc: BoardAdc<'static>, inverter: BoardInverter<'static>) 
             ),
         );
 
-        let requested_output = match select(CONTROL_COMMAND_CHANNEL.receive(), adc_read).await {
-            Either::First(ControlCommand::Stop) => {
+        let requested_output = match select(
+            select(
+                power_stage::next_gate_request(),
+                CONTROL_COMMAND_CHANNEL.receive(),
+            ),
+            adc_read,
+        )
+        .await
+        {
+            Either::First(Either::First(request)) => {
+                power_stage::handle_request(request, &mut inverter);
+                continue;
+            }
+            Either::First(Either::Second(ControlCommand::Stop)) => {
                 strategy = ControlStrategy::Disabled;
                 RequestedOutput::ArmedSafe
             }
-            Either::First(ControlCommand::InhibitForDfu { request_id }) => {
+            Either::First(Either::Second(ControlCommand::InhibitForDfu { request_id })) => {
                 strategy = ControlStrategy::Disabled;
                 RequestedOutput::DfuInhibited { request_id }
             }
@@ -94,6 +107,13 @@ pub async fn task_adc(adc: BoardAdc<'static>, inverter: BoardInverter<'static>) 
             }
         };
 
+        if safety::dfu_shutdown_requested()
+            && !matches!(requested_output, RequestedOutput::DfuInhibited { .. })
+        {
+            strategy = ControlStrategy::Disabled;
+            inverter.inhibit(InhibitCause::FirmwareUpdate);
+            continue;
+        }
         match requested_output {
             RequestedOutput::ArmedSafe => inverter.enter_armed_safe(),
             RequestedOutput::Inhibited(cause) => inverter.inhibit(cause),
@@ -132,24 +152,4 @@ enum RequestedOutput {
     DfuInhibited { request_id: u32 },
     Drive(RawInverterValues),
     Fault(ControlFault),
-}
-
-struct BoardOutput(BoardInverter<'static>);
-
-impl InverterOutput for BoardOutput {
-    fn max_duty(&self) -> u32 {
-        self.0.get_max_duty()
-    }
-
-    fn disable_outputs(&mut self) {
-        self.0.disable();
-    }
-
-    fn write_phase_duties(&mut self, duties: RawInverterValues) {
-        self.0.set_phase_duties(duties.u, duties.v, duties.w);
-    }
-
-    fn enable_outputs(&mut self) {
-        self.0.enable();
-    }
 }

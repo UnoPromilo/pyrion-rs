@@ -67,6 +67,16 @@ impl<D: InverterOutput> SafeOutput<D> {
         self.state
     }
 
+    pub fn with_startup_driver<R>(
+        &mut self,
+        f: impl FnOnce(&mut D) -> R,
+    ) -> Result<R, OutputState> {
+        if self.state != OutputState::Inhibited(InhibitCause::Startup) {
+            return Err(self.state);
+        }
+        Ok(f(&mut self.driver))
+    }
+
     pub fn arm_after_preflight(&mut self) -> Result<(), ArmError> {
         match self.state {
             OutputState::Inhibited(InhibitCause::FirmwareUpdate) => {
@@ -200,6 +210,47 @@ mod tests {
             OutputState::Inhibited(InhibitCause::Startup)
         );
         assert!(output.driver.operations.is_empty());
+    }
+
+    #[test]
+    fn startup_handoff_can_only_touch_a_startup_inhibited_output() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        assert!(
+            output
+                .with_startup_driver(|driver| driver.operations.push(Operation::Disable))
+                .is_ok()
+        );
+
+        output.inhibit(InhibitCause::Fault);
+        assert_eq!(
+            output.with_startup_driver(|driver| driver.operations.push(Operation::Enable)),
+            Err(OutputState::Inhibited(InhibitCause::Fault))
+        );
+        output.inhibit(InhibitCause::FirmwareUpdate);
+        assert_eq!(
+            output.with_startup_driver(|driver| driver.operations.push(Operation::Enable)),
+            Err(OutputState::Inhibited(InhibitCause::FirmwareUpdate))
+        );
+        output.inhibit(InhibitCause::Startup);
+        output.arm_after_preflight().unwrap();
+        assert_eq!(
+            output.with_startup_driver(|driver| driver.operations.push(Operation::Enable)),
+            Err(OutputState::ArmedSafe)
+        );
+        assert_eq!(
+            output.driver.operations,
+            [
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO),
+                Operation::Disable,
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO),
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO),
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO)
+            ]
+        );
     }
 
     #[test]

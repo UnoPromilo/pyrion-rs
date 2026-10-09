@@ -1,6 +1,6 @@
-use crate::injected::pac::{ModifyPac, ReadPac};
-use crate::state::State;
-use crate::{AdcInstance, EndOfConversionSignal};
+use crate::adc::injected::pac::{ModifyPac, ReadPac};
+use crate::adc::state::State;
+use crate::adc::{AdcInstance, EndOfConversionSignal};
 use core::sync::atomic::{Ordering, compiler_fence};
 
 pub fn on_interrupt<T: AdcInstance>(state: &State) {

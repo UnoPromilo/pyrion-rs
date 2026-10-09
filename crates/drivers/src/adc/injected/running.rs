@@ -1,9 +1,9 @@
-use crate::injected::Configured;
-use crate::injected::pac::{ModifyPac, ReadPac};
-use crate::{AdcInstance, Continuous, EndOfConversionSignal, Single};
-use defmt::debug;
+use crate::adc::injected::Configured;
+use crate::adc::injected::pac::{ModifyPac, ReadPac};
+use crate::adc::{AdcInstance, Continuous, EndOfConversionSignal, Single};
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Interrupt;
+use logging::debug;
 use logging::trace;
 use stm32_metapac::adc::vals::SampleTime;
 

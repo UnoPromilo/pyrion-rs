@@ -1,4 +1,4 @@
-use crate::{AdcInstance, injected};
+use crate::adc::{AdcInstance, injected};
 use core::marker::PhantomData;
 use embassy_stm32::interrupt;
 use embassy_stm32::interrupt::typelevel::Interrupt;

@@ -223,16 +223,22 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
                             let value = error_register.cells[i];
                             let mapped_error = match err {
                                 fault_register::FaultType::Encoder => {
-                                    device_message::FaultType::Encoder
+                                    device_message::FaultType::Encoder as i32
                                 }
                                 fault_register::FaultType::AdcTimeout => {
-                                    device_message::FaultType::AdcTimeout
+                                    device_message::FaultType::AdcTimeout as i32
                                 }
                                 fault_register::FaultType::InvalidMeasurement => {
-                                    device_message::FaultType::InvalidMeasurement
+                                    device_message::FaultType::InvalidMeasurement as i32
                                 }
                                 fault_register::FaultType::InvalidControllerOutput => {
-                                    device_message::FaultType::InvalidControllerOutput
+                                    device_message::FaultType::InvalidControllerOutput as i32
+                                }
+                                fault_register::FaultType::GateDriverStartup => {
+                                    device_message::FaultType::GateDriverStartup as i32
+                                }
+                                fault_register::FaultType::GateDriverRuntime => {
+                                    device_message::FaultType::GateDriverRuntime as i32
                                 }
                             };
 
@@ -241,14 +247,14 @@ fn map_event_to_proto(event: Event) -> DeviceMessage {
 
                                 fault_register::FaultState::Active => {
                                     Some(device_message::FaultEntry {
-                                        r#type: mapped_error as i32,
+                                        r#type: mapped_error,
                                         state: device_message::FaultState::Active as i32,
                                     })
                                 }
 
                                 fault_register::FaultState::Latched => {
                                     Some(device_message::FaultEntry {
-                                        r#type: mapped_error as i32,
+                                        r#type: mapped_error,
                                         state: device_message::FaultState::Latched as i32,
                                     })
                                 }
@@ -310,7 +316,7 @@ mod tests {
     use enum_iterator::Sequence;
 
     #[test]
-    fn every_firmware_fault_maps_to_a_named_grpc_fault() {
+    fn every_firmware_fault_maps_to_a_grpc_fault_number() {
         let message = map_event_to_proto(Event::FaultRegister(transport::event::FaultRegister {
             cells: [fault_register::FaultState::Active; fault_register::FaultType::CARDINALITY],
         }));
@@ -323,19 +329,55 @@ mod tests {
             .into_iter()
             .map(|fault| fault.r#type)
             .collect();
-        assert_eq!(
-            types,
-            [
-                device_message::FaultType::Encoder as i32,
-                device_message::FaultType::AdcTimeout as i32,
-                device_message::FaultType::InvalidMeasurement as i32,
-                device_message::FaultType::InvalidControllerOutput as i32,
-            ]
-        );
+        assert_eq!(types, [1, 2, 3, 4, 5, 6]);
         assert!(
             types
                 .iter()
                 .all(|fault| *fault != device_message::FaultType::Unspecified as i32)
+        );
+    }
+
+    #[test]
+    fn gate_driver_startup_maps_to_active_grpc_fault_without_reason() {
+        let mut cells = [fault_register::FaultState::Clean; fault_register::FaultType::CARDINALITY];
+        cells[fault_register::FaultType::GateDriverStartup as usize] =
+            fault_register::FaultState::Active;
+        let message = map_event_to_proto(Event::FaultRegister(transport::event::FaultRegister {
+            cells,
+        }));
+        let DeviceMessagePayload::FaultRegister(register) = message.payload.unwrap() else {
+            panic!("expected fault register");
+        };
+        assert_eq!(register.faults.len(), 1);
+        assert_eq!(
+            register.faults[0].r#type,
+            device_message::FaultType::GateDriverStartup as i32
+        );
+        assert_eq!(
+            register.faults[0].state,
+            device_message::FaultState::Active as i32
+        );
+    }
+
+    #[test]
+    fn gate_driver_runtime_maps_to_distinct_active_grpc_fault() {
+        let mut cells = [fault_register::FaultState::Clean; fault_register::FaultType::CARDINALITY];
+        cells[fault_register::FaultType::GateDriverRuntime as usize] =
+            fault_register::FaultState::Active;
+        let message = map_event_to_proto(Event::FaultRegister(transport::event::FaultRegister {
+            cells,
+        }));
+        let DeviceMessagePayload::FaultRegister(register) = message.payload.unwrap() else {
+            panic!("expected fault register");
+        };
+        assert_eq!(register.faults.len(), 1);
+        assert_eq!(
+            register.faults[0].r#type,
+            device_message::FaultType::GateDriverRuntime as i32
+        );
+        assert_eq!(
+            register.faults[0].state,
+            device_message::FaultState::Active as i32
         );
     }
 }

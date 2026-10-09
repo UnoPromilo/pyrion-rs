@@ -5,7 +5,6 @@ use embassy_stm32::time::{Hertz, khz, mhz};
 pub struct UserConfig {
     pub pwm_frequency: Hertz,
     pub onboard_i2c_frequency: Hertz,
-    pub onboard_spi_frequency: Hertz,
     pub external_i2c_frequency: Hertz,
     pub external_spi_frequency: Hertz,
     pub can_bitrate: u32,
@@ -27,7 +26,6 @@ impl Default for UserConfig {
         Self {
             pwm_frequency: khz(40),
             onboard_i2c_frequency: khz(100),
-            onboard_spi_frequency: mhz(1),
             external_i2c_frequency: khz(100),
             external_spi_frequency: mhz(1),
             can_bitrate: 250_000,

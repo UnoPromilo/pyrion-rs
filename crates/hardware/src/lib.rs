@@ -2,8 +2,6 @@
 
 mod board;
 mod boards;
-#[cfg(feature = "cap-drv8301")]
-mod drv8301;
 mod feature_guards;
 #[cfg(any(feature = "cap-voltage-filter", feature = "cap-current-filter"))]
 mod filter;
@@ -16,10 +14,10 @@ mod serial_number;
 pub mod usb;
 
 pub use board::*;
+#[cfg(feature = "board-pyrion-ovo")]
+pub use boards::validate_drv8301_configuration;
 #[cfg(feature = "board")]
 pub use boards::{BOARD_ID, limits};
-#[cfg(feature = "cap-drv8301")]
-pub use drv8301::Drv8301;
 #[cfg(any(feature = "cap-voltage-filter", feature = "cap-current-filter"))]
 pub use filter::SenseFilter;
 #[cfg(feature = "board")]

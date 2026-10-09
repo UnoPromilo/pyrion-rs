@@ -1,8 +1,9 @@
-use crate::injected::AnyExtTrigger;
-use crate::injected::pac::ModifyPac;
-use crate::injected::running::Running;
-use crate::interrupt::InterruptHandler;
-use crate::{AdcInstance, Continuous, EndOfConversionSignal, Single, define_channels_mod};
+use crate::adc::injected::AnyExtTrigger;
+use crate::adc::injected::pac::ModifyPac;
+use crate::adc::injected::running::Running;
+use crate::adc::interrupt::InterruptHandler;
+use crate::adc::{AdcInstance, Continuous, EndOfConversionSignal, Single};
+use crate::define_channels_mod;
 use core::marker::PhantomData;
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Binding;

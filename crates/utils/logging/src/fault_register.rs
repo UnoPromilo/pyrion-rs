@@ -16,6 +16,8 @@ pub enum FaultType {
     AdcTimeout,
     InvalidMeasurement,
     InvalidControllerOutput,
+    GateDriverStartup,
+    GateDriverRuntime,
 }
 
 pub struct FaultRegister {
@@ -55,8 +57,8 @@ impl FaultRegister {
     }
 
     pub fn shared() -> &'static Self {
-        static ERROR_REGISTER: FaultRegister = FaultRegister::new();
-        &ERROR_REGISTER
+        static FAULT_REGISTER: FaultRegister = FaultRegister::new();
+        &FAULT_REGISTER
     }
 
     pub fn load(&self, e: FaultType) -> FaultState {
@@ -291,7 +293,9 @@ mod tests {
                 FaultState::Active,
                 FaultState::Clean,
                 FaultState::Clean,
-                FaultState::Clean
+                FaultState::Clean,
+                FaultState::Clean,
+                FaultState::Clean,
             ]
         );
     }
@@ -309,7 +313,9 @@ mod tests {
                 FaultState::Latched,
                 FaultState::Clean,
                 FaultState::Clean,
-                FaultState::Clean
+                FaultState::Clean,
+                FaultState::Clean,
+                FaultState::Clean,
             ]
         );
     }
@@ -400,5 +406,38 @@ mod tests {
 
         assert_eq!(reg.load(FaultType::Encoder), FaultState::Active);
         assert_eq!(reg.active_count(), 1);
+    }
+
+    #[test]
+    fn gate_driver_startup_remains_active_when_latched_faults_are_cleared() {
+        let reg = fresh_register();
+        reg.set(FaultType::GateDriverStartup);
+        reg.latch(FaultType::Encoder);
+
+        reg.clear_latched();
+
+        assert_eq!(FaultType::GateDriverStartup as usize, 4);
+        assert_eq!(FaultType::CARDINALITY, 6);
+        assert_eq!(reg.load(FaultType::GateDriverStartup), FaultState::Active);
+        assert_eq!(reg.snapshot()[4], FaultState::Active);
+        assert_eq!(reg.active_count(), 1);
+        assert_eq!(reg.latched_count(), 0);
+    }
+
+    #[test]
+    fn gate_driver_runtime_is_distinct_and_remains_active_for_the_boot() {
+        let reg = fresh_register();
+        reg.set(FaultType::GateDriverRuntime);
+        reg.set(FaultType::GateDriverRuntime);
+        reg.latch(FaultType::Encoder);
+
+        reg.clear_latched();
+
+        assert_eq!(FaultType::GateDriverRuntime as usize, 5);
+        assert_eq!(reg.load(FaultType::GateDriverStartup), FaultState::Clean);
+        assert_eq!(reg.load(FaultType::GateDriverRuntime), FaultState::Active);
+        assert_eq!(reg.snapshot()[5], FaultState::Active);
+        assert_eq!(reg.active_count(), 1);
+        assert_eq!(reg.latched_count(), 0);
     }
 }

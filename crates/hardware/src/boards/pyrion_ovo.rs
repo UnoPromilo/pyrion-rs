@@ -1,18 +1,25 @@
 use crate::irqs::Irqs;
 use crate::limits::{BoardId, BoardLimits};
 use crate::serial_number::get_serial_number_as_hex;
-use crate::{Board, BoardLeds, Drv8301, SenseFilter};
+use crate::{Board, BoardLeds, SenseFilter};
 use core::cell::RefCell;
 use crc_engine::hardware::HardwareCrcEngine;
+use drivers::{ConfigurationError, Drv8301Configuration, Drv8301Stage, SixPwmTim1};
+use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::flash::Flash;
-use embassy_stm32::gpio::{Input, Level, Output, Pull, Speed};
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::{can, i2c, spi, usart, usb};
 use embassy_sync::blocking_mutex::Mutex;
-use inverter::Inverter;
 use units::{ElectricCurrent, ElectricPotential, F32UnitType};
 use user_config::UserConfig;
 
 pub const BOARD_ID: BoardId = BoardId::PyrionOvo;
+
+pub fn validate_drv8301_configuration(
+    configuration: Drv8301Configuration,
+) -> Result<Drv8301Configuration, ConfigurationError> {
+    configuration.validate_max_threshold_code(27)
+}
 
 pub fn limits() -> BoardLimits {
     BoardLimits {
@@ -32,7 +39,7 @@ impl Board<'static> {
             p.PB0, p.PB1, p.PA9, p.PA8,
         );
 
-        let inverter = Inverter::new(
+        let pwm = SixPwmTim1::new(
             p.TIM1,
             p.PC0,
             p.PB13,
@@ -49,9 +56,7 @@ impl Board<'static> {
             config.sda_pullup = true;
             config.scl_pullup = true;
             config.frequency = user_config.external_i2c_frequency;
-            i2c::I2c::new(
-                p.I2C4, p.PC6, p.PC7, p.DMA1_CH4, p.DMA1_CH5, Irqs, config,
-            )
+            i2c::I2c::new(p.I2C4, p.PC6, p.PC7, p.DMA1_CH4, p.DMA1_CH5, Irqs, config)
         };
 
         let ext_spi = {
@@ -64,9 +69,7 @@ impl Board<'static> {
 
         let uart = {
             let config = usart::Config::default();
-            match usart::Uart::new(
-                p.USART1, p.PC5, p.PC4, p.DMA1_CH6, p.DMA1_CH7, Irqs, config,
-            ) {
+            match usart::Uart::new(p.USART1, p.PC5, p.PC4, p.DMA1_CH6, p.DMA1_CH7, Irqs, config) {
                 Ok(uart) => uart,
                 Err(e) => core::panic!("uart initialization error: {:?}", e),
             }
@@ -83,16 +86,16 @@ impl Board<'static> {
             can.start(can::OperatingMode::NormalOperationMode)
         };
 
-        let drv8301 = {
-            let mut config = spi::Config::default();
-            config.frequency = user_config.onboard_spi_frequency;
+        let power_stage = {
+            let config = super::drv8301_spi_config();
             let bus = spi::Spi::new(
                 p.SPI1, p.PA5, p.PA7, p.PA6, p.DMA2_CH1, p.DMA2_CH2, Irqs, config,
             );
             let cs = Output::new(p.PA4, Level::High, Speed::High);
             let en_gate = Output::new(p.PA0, Level::Low, Speed::Low);
-            let nfault = Input::new(p.PB12, Pull::Up);
-            Drv8301::new(bus, cs, en_gate, nfault)
+            // EXTI owns PB12 in input mode; this does not configure TIM1 BKIN (AF6).
+            let n_fault = ExtiInput::new(p.PB12, p.EXTI12, Pull::Up, Irqs);
+            Drv8301Stage::new(pwm, bus, cs, en_gate, n_fault)
         };
 
         let voltage_filter = SenseFilter::new(Output::new(p.PA10, Level::Low, Speed::Low));
@@ -114,13 +117,12 @@ impl Board<'static> {
 
         Self {
             adc,
-            inverter,
             crc,
             can,
             ext_i2c,
             ext_spi,
             uart,
-            drv8301,
+            power_stage,
             voltage_filter,
             current_filter,
             flash_bank1,

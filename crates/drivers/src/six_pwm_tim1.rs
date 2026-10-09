@@ -1,3 +1,4 @@
+use embassy_stm32::Peri;
 use embassy_stm32::gpio::OutputType;
 use embassy_stm32::time::Hertz;
 use embassy_stm32::timer::complementary_pwm::{ComplementaryPwm, ComplementaryPwmPin};
@@ -6,17 +7,17 @@ use embassy_stm32::timer::simple_pwm::PwmPin;
 use embassy_stm32::timer::{
     AdvancedInstance4Channel, Ch1, Ch2, Ch3, Channel, TimerComplementaryPin, TimerPin,
 };
-use embassy_stm32::{Peri, pac};
 use logging::debug;
+use stm32_metapac as pac;
 use stm32_metapac::timer::vals::Mms;
 
 const TRGO_OFFSET: u32 = 2;
 
-pub struct Inverter<'a, T: AdvancedInstance4Channel> {
+pub struct SixPwmTim1<'a, T: AdvancedInstance4Channel> {
     pwm: ComplementaryPwm<'a, T>,
 }
 
-impl<'a, T: AdvancedInstance4Channel> Inverter<'a, T> {
+impl<'a, T: AdvancedInstance4Channel> SixPwmTim1<'a, T> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         tim: Peri<'a, T>,

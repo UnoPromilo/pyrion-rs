@@ -1,6 +1,6 @@
-use crate::EndOfConversionSignal;
-use crate::injected::AnyExtTrigger;
-use crate::pac_instance::PacInstance;
+use crate::adc::EndOfConversionSignal;
+use crate::adc::injected::AnyExtTrigger;
+use crate::adc::pac_instance::PacInstance;
 use embassy_stm32::adc::AnyAdcChannel;
 use stm32_metapac::adc::vals::{Adstp, Exten, SampleTime};
 

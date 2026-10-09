@@ -1,5 +1,3 @@
-#![no_std]
-
 mod config;
 mod driver;
 mod error;

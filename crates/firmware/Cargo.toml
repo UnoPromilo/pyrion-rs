@@ -34,9 +34,10 @@ board-pyrion-ovo = [
 board-pyrion-nullo = [
     "hardware/board-pyrion-nullo",
     "cap-shunt-two",
+    "cap-drv8301",
 ]
 
-cap-external-i2c = ["hardware/cap-external-i2c", "user-config/cap-external-i2c"]
+cap-external-i2c = ["hardware/cap-external-i2c", "user-config/cap-external-i2c", "drivers/as5600"]
 cap-external-spi = ["hardware/cap-external-spi"]
 cap-uart = ["hardware/cap-uart"]
 cap-can = ["hardware/cap-can"]
@@ -44,9 +45,13 @@ cap-drv8301 = ["hardware/cap-drv8301"]
 cap-hall = ["hardware/cap-hall"]
 cap-voltage-filter = ["hardware/cap-voltage-filter"]
 cap-current-filter = ["hardware/cap-current-filter"]
+cap-six-pwm-tim1 = ["hardware/cap-six-pwm-tim1"]
 
 cap-shunt-two = ["hardware/cap-shunt-two"]
 cap-shunt-three = ["hardware/cap-shunt-three"]
+
+cap-drv8301-dtc-10k = ["hardware/cap-drv8301-dtc-10k"]
+cap-drv8301-dtc-20k = ["hardware/cap-drv8301-dtc-20k"]
 
 cap-adc-phase-voltage = ["hardware/cap-adc-phase-voltage"]
 cap-adc-bus-voltage = ["hardware/cap-adc-bus-voltage"]
@@ -73,7 +78,7 @@ critical-section = "1.1"
 static_cell = { version = "2.1.1" }
 embedded-storage = { version = "0.3.1" }
 
-as5600 = { path = "../drivers/as5600", features = ["defmt"] }
+drivers = { path = "../drivers", features = ["defmt"] }
 controller-shared = { path = "../controllers/controller_shared", features = ["defmt"] }
 hardware = { path = "../hardware", features = ["defmt"] }
 led-manager = { path = "../led_manager", features = ["hardware-support"] }

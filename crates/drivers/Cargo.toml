@@ -1,0 +1,29 @@
+[package]
+name = "drivers"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+adc = ["dep:embassy-stm32", "dep:stm32-metapac", "dep:embassy-sync", "dep:embassy-time", "dep:logging"]
+as5600 = ["dep:embedded-hal-async", "dep:logging"]
+six-pwm-tim1 = ["dep:embassy-stm32", "dep:stm32-metapac", "dep:logging"]
+log = ["logging?/log", "embassy-sync?/log", "embassy-time?/log"]
+defmt = ["dep:defmt", "stm32-metapac?/defmt", "embassy-stm32?/defmt", "embassy-sync?/defmt", "embassy-time?/defmt", "embedded-hal-async?/defmt-03", "logging?/defmt"]
+drv8301 = ["dep:drv8301-dd", "dep:embedded-hal-async", "dep:embassy-stm32", "embassy-stm32/exti", "dep:embassy-time", "dep:units"]
+drv8301-dtc-10k = []
+drv8301-dtc-20k = []
+
+[dependencies]
+defmt = { version = "1.0.1", optional = true }
+stm32-metapac = { version = "21.0.0", features = ["stm32g474re"], optional = true }
+embassy-stm32 = { version = "0.6.0", features = ["stm32g474re", "dual-bank"], optional = true }
+embassy-sync = { version = "0.8.0", optional = true }
+embassy-time = { version = "0.5.0", optional = true }
+embedded-hal-async = { version = "1.0.0", optional = true }
+logging = { path = "../utils/logging", optional = true }
+drv8301-dd = { version = "=0.3.0", optional = true }
+units = { path = "../utils/units", optional = true }
+
+[dev-dependencies]
+drv8301-dd = "=0.3.0"
+embedded-hal-async = "1.0.0"

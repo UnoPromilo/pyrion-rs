@@ -1,4 +1,4 @@
-use crate::trigger_edge::ExtTriggerEdge;
+use crate::adc::trigger_edge::ExtTriggerEdge;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
