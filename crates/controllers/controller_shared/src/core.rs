@@ -26,6 +26,8 @@ pub fn control_step(
         * default_config.v_bus_scale_ratio;
     let cpu_temp = convert_to_temperature(raw_snapshot.temp_cpu, raw_snapshot.v_ref);
 
+    store_in_state(u, v, w, v_bus, cpu_temp);
+
     if !u.value.is_finite()
         || !v.value.is_finite()
         || !w.value.is_finite()
@@ -35,8 +37,6 @@ pub fn control_step(
     {
         return ControlOutput::Fault(ControlFault::InvalidMeasurement);
     }
-
-    store_in_state(u, v, w, v_bus, cpu_temp);
 
     match control_strategy {
         ControlStrategy::Disabled => ControlOutput::Safe,

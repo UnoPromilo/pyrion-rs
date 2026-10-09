@@ -36,7 +36,6 @@ pub(crate) fn handle_request(request: GateRequest, inverter: &mut SafeOutput<Boa
     match request {
         GateRequest::Wake => {
             let accepted = !faults.any_active()
-                && !faults.any_latched()
                 && !safety::dfu_shutdown_requested()
                 && matches!(
                     inverter.state(),
@@ -49,7 +48,6 @@ pub(crate) fn handle_request(request: GateRequest, inverter: &mut SafeOutput<Boa
         }
         GateRequest::Finish(proof) => {
             let safe_to_accept = !faults.any_active()
-                && !faults.any_latched()
                 && !safety::dfu_shutdown_requested()
                 && matches!(
                     inverter.state(),

@@ -13,7 +13,7 @@ use embassy_futures::select::{Either, select};
 use embassy_time::{Duration, Instant, with_timeout};
 use hardware::BoardAdc;
 use logging::FreqMeter;
-use logging::fault_register::{FaultRegister, FaultType};
+use logging::fault_register::{FaultRegister, FaultState, FaultType};
 
 #[embassy_executor::task]
 pub async fn task_adc(adc: BoardAdc<'static>, pwm: UncheckedOutput) {
@@ -67,13 +67,20 @@ pub async fn task_adc(adc: BoardAdc<'static>, pwm: UncheckedOutput) {
                 RequestedOutput::DfuInhibited { request_id }
             }
             Either::Second(Err(_)) => {
-                faults.latch(FaultType::AdcTimeout);
+                faults.set(FaultType::AdcTimeout);
                 strategy = ControlStrategy::Disabled;
                 RequestedOutput::Inhibited(InhibitCause::Fault)
             }
             Either::Second(Ok(values)) => {
-                if faults.any_active() || faults.any_latched() {
+                faults.resolve_if_set(FaultType::AdcTimeout);
+
+                if faults.any_active() {
                     strategy = ControlStrategy::Disabled;
+                }
+
+                if faults.any_active()
+                    && faults.load(FaultType::InvalidMeasurement) != FaultState::Active
+                {
                     RequestedOutput::Inhibited(InhibitCause::Fault)
                 } else {
                     let raw_reading = RawSnapshot {
@@ -99,7 +106,14 @@ pub async fn task_adc(adc: BoardAdc<'static>, pwm: UncheckedOutput) {
                         angle: controller_state.raw_angle.load(Ordering::Relaxed),
                     };
                     match control_step(&raw_reading, &mut strategy) {
-                        ControlOutput::Safe => RequestedOutput::ArmedSafe,
+                        ControlOutput::Safe => {
+                            faults.resolve_if_set(FaultType::InvalidMeasurement);
+                            if faults.any_active() {
+                                RequestedOutput::Inhibited(InhibitCause::Fault)
+                            } else {
+                                RequestedOutput::ArmedSafe
+                            }
+                        }
                         ControlOutput::Drive(values) => RequestedOutput::Drive(values),
                         ControlOutput::Fault(fault) => RequestedOutput::Fault(fault),
                     }
@@ -114,6 +128,17 @@ pub async fn task_adc(adc: BoardAdc<'static>, pwm: UncheckedOutput) {
             inverter.inhibit(InhibitCause::FirmwareUpdate);
             continue;
         }
+
+        if faults.any_active()
+            && matches!(
+                requested_output,
+                RequestedOutput::ArmedSafe | RequestedOutput::Drive(_)
+            )
+        {
+            strategy = ControlStrategy::Disabled;
+            inverter.inhibit(InhibitCause::Fault);
+            continue;
+        }
         match requested_output {
             RequestedOutput::ArmedSafe => inverter.enter_armed_safe(),
             RequestedOutput::Inhibited(cause) => inverter.inhibit(cause),
@@ -123,13 +148,13 @@ pub async fn task_adc(adc: BoardAdc<'static>, pwm: UncheckedOutput) {
             }
             RequestedOutput::Drive(values) => {
                 if inverter.drive(values).is_err() {
-                    faults.latch(FaultType::InvalidControllerOutput);
+                    faults.set(FaultType::InvalidControllerOutput);
                     strategy = ControlStrategy::Disabled;
                     inverter.inhibit(InhibitCause::Fault);
                 }
             }
             RequestedOutput::Fault(fault) => {
-                faults.latch(match fault {
+                faults.set(match fault {
                     ControlFault::InvalidMeasurement => FaultType::InvalidMeasurement,
                     ControlFault::InvalidControllerOutput => FaultType::InvalidControllerOutput,
                 });

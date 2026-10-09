@@ -40,8 +40,10 @@ preflight fails. The fault event contains six positional states, with
 GateDriverStartup at index 4 and GateDriverRuntime at index 5. Runtime
 `nFAULT` monitoring is deferred until there is a gate-enabled operational
 path; the gate is lowered after preflight, so an off-state pin level must
-not set `GATE_DRIVER_RUNTIME`. Active faults remain Active for the boot;
-`faults clear-resolved` does not clear them. Detailed startup causes are
+not set `GATE_DRIVER_RUNTIME`. `GATE_DRIVER_STARTUP` remains Active for the
+boot; other Active faults may resolve to Latched after verified recovery.
+Latched faults preserve history without blocking operation, and
+`faults clear-resolved` clears only Latched faults. Detailed startup causes are
 logged via defmt/RTT, not returned by the fault query. The protobuf schema
 is also maintained separately; both the in-repository schema and host
 mapping name fault type numbers 5 (startup) and 6 (runtime).
