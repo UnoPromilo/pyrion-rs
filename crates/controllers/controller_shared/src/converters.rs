@@ -1,7 +1,6 @@
 use units::si::electric_potential::millivolt;
 use units::si::electrical_resistance::milliohm;
-use units::si::thermodynamic_temperature::degree_celsius;
-use units::{ElectricCurrent, ElectricPotential, ElectricalResistance, ThermodynamicTemperature};
+use units::{ElectricCurrent, ElectricPotential, ElectricalResistance};
 
 pub fn convert_to_current(
     sample: u16,
@@ -16,15 +15,6 @@ pub fn convert_to_current(
 pub fn convert_to_voltage(sample: i32, vrefint_sample: u16) -> ElectricPotential {
     let mv = convert_to_millivolts(sample, vrefint_sample);
     ElectricPotential::new::<millivolt>(mv as f32)
-}
-
-pub fn convert_to_temperature(sample: u16, vrefint_sample: u16) -> ThermodynamicTemperature {
-    // Check the RM0440 and DS12288 for more details on temperature sensor and how to use calibration values
-    const V30: i32 = 760; // mV
-    const AVG_SLOPE: f32 = 2.5; // mV/C
-    let mv = convert_to_millivolts(sample as i32, vrefint_sample);
-    let temp_c = (mv - V30) as f32 / AVG_SLOPE + 30.0;
-    ThermodynamicTemperature::new::<degree_celsius>(temp_c)
 }
 
 fn convert_to_millivolts(sample: i32, vrefint_sample: u16) -> i32 {
@@ -47,7 +37,7 @@ pub struct ConfigValues {
 impl Default for ConfigValues {
     fn default() -> Self {
         Self {
-            shunt_resistance: ElectricalResistance::new::<milliohm>(5.0),
+            shunt_resistance: ElectricalResistance::new::<milliohm>(0.5),
             v_bus_scale_ratio: (39.0 + 2.0) / 2.0,
             current_gain: 20.0,
             current_zero_offset: 2048,

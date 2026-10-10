@@ -13,6 +13,7 @@ bench = false
 
 [features]
 mcu-core = []
+adc-timing = ["drivers/adc-timing"]
 board-pyrion-ovo = [
     "hardware/board-pyrion-ovo",
     "cap-shunt-three",
@@ -71,7 +72,7 @@ embassy-time = { version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime
 embassy-usb = { version = "0.6.0" }
 
 defmt = "1.0.1"
-defmt-rtt = "1.0.0"
+defmt-rtt = { version = "1.0.0", features = ["drop-on-contention", "disable-blocking-mode"] }
 cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.0"
 critical-section = "1.1"

@@ -1,20 +1,19 @@
 use units::si::Quantity;
-use units::{DutyCycle, ElectricPotential, Ratio};
+use units::{DutyCycle, Ratio};
 
 pub const ONE_OVER_SQRT3: f32 = 0.577_350_26_f32;
 pub const TWO_OVER_SQRT3: f32 = ONE_OVER_SQRT3 * 2f32;
 
 pub fn alternate_reverse_space_vector_modulation(
-    alpha: ElectricPotential,
-    beta: ElectricPotential,
-    v_bus: ElectricPotential,
+    alpha: Ratio,
+    beta: Ratio,
 ) -> (DutyCycle, DutyCycle, DutyCycle) {
     let sector = get_sector(alpha, beta);
-    let (t_a, t_b) = calculate_vector_times(alpha, beta, v_bus, sector);
+    let (t_a, t_b) = calculate_vector_times(alpha, beta, sector);
     calculate_duty_times(t_a, t_b, sector)
 }
 
-fn get_sector(alpha: ElectricPotential, beta: ElectricPotential) -> Sector {
+fn get_sector(alpha: Ratio, beta: Ratio) -> Sector {
     let a = alpha.value;
     let b = beta.value;
 
@@ -57,39 +56,20 @@ fn get_sector(alpha: ElectricPotential, beta: ElectricPotential) -> Sector {
     }
 }
 
-fn calculate_vector_times(
-    alpha: ElectricPotential,
-    beta: ElectricPotential,
-    v_bus: ElectricPotential,
-    sector: Sector,
-) -> (Ratio, Ratio) {
-    let alpha_normalized = alpha / v_bus;
-    let beta_normalized = beta / v_bus;
+fn calculate_vector_times(alpha: Ratio, beta: Ratio, sector: Sector) -> (Ratio, Ratio) {
     match sector {
-        Sector::First => (
-            alpha_normalized - ONE_OVER_SQRT3 * beta_normalized,
-            TWO_OVER_SQRT3 * beta_normalized,
-        ),
+        Sector::First => (alpha - ONE_OVER_SQRT3 * beta, TWO_OVER_SQRT3 * beta),
         Sector::Second => (
-            alpha_normalized + ONE_OVER_SQRT3 * beta_normalized,
-            -alpha_normalized + ONE_OVER_SQRT3 * beta_normalized,
+            alpha + ONE_OVER_SQRT3 * beta,
+            -alpha + ONE_OVER_SQRT3 * beta,
         ),
-        Sector::Third => (
-            TWO_OVER_SQRT3 * beta_normalized,
-            -alpha_normalized - ONE_OVER_SQRT3 * beta_normalized,
-        ),
-        Sector::Fourth => (
-            -alpha_normalized + ONE_OVER_SQRT3 * beta_normalized,
-            -TWO_OVER_SQRT3 * beta_normalized,
-        ),
+        Sector::Third => (TWO_OVER_SQRT3 * beta, -alpha - ONE_OVER_SQRT3 * beta),
+        Sector::Fourth => (-alpha + ONE_OVER_SQRT3 * beta, -TWO_OVER_SQRT3 * beta),
         Sector::Fifth => (
-            -alpha_normalized - ONE_OVER_SQRT3 * beta_normalized,
-            alpha_normalized - ONE_OVER_SQRT3 * beta_normalized,
+            -alpha - ONE_OVER_SQRT3 * beta,
+            alpha - ONE_OVER_SQRT3 * beta,
         ),
-        Sector::Sixth => (
-            -TWO_OVER_SQRT3 * beta_normalized,
-            alpha_normalized + ONE_OVER_SQRT3 * beta_normalized,
-        ),
+        Sector::Sixth => (-TWO_OVER_SQRT3 * beta, alpha + ONE_OVER_SQRT3 * beta),
     }
 }
 
@@ -182,10 +162,7 @@ mod tests {
             let alpha = rad.cos();
             let beta = rad.sin();
 
-            let sector = get_sector(
-                ElectricPotential::from_f32(alpha),
-                ElectricPotential::from_f32(beta),
-            );
+            let sector = get_sector(Ratio::from_f32(alpha), Ratio::from_f32(beta));
             let expected = expected_sector(angle);
 
             assert_eq!(
@@ -198,17 +175,15 @@ mod tests {
 
     #[test]
     fn svm_round_trip_alpha_beta() {
-        let v_bus = ElectricPotential::from_f32(1.0);
-
         for deg in 0..360 {
             let theta = (deg as f32).to_radians();
             let alpha_norm = SQRT3_OVER_TWO * theta.cos();
             let beta_norm = SQRT3_OVER_TWO * theta.sin();
 
-            let alpha = ElectricPotential::from_f32(alpha_norm);
-            let beta = ElectricPotential::from_f32(beta_norm);
+            let alpha = Ratio::from_f32(alpha_norm);
+            let beta = Ratio::from_f32(beta_norm);
 
-            let (u, v, w) = alternate_reverse_space_vector_modulation(alpha, beta, v_bus);
+            let (u, v, w) = alternate_reverse_space_vector_modulation(alpha, beta);
             let (alpha_rec, beta_rec) = reconstruct_alpha_beta(u, v, w);
 
             assert!(
@@ -235,11 +210,10 @@ mod tests {
 
             let rad = angle.to_radians();
             let m = SQRT3_OVER_TWO - EPS;
-            let alpha = ElectricPotential::from_f32(rad.cos() * m);
-            let beta = ElectricPotential::from_f32(rad.sin() * m);
-            let v_bus = ElectricPotential::from_f32(1.0);
+            let alpha = Ratio::from_f32(rad.cos() * m);
+            let beta = Ratio::from_f32(rad.sin() * m);
 
-            let (u, v, w) = alternate_reverse_space_vector_modulation(alpha, beta, v_bus);
+            let (u, v, w) = alternate_reverse_space_vector_modulation(alpha, beta);
             let (u, v, w) = (u.value, v.value, w.value);
             assert!(
                 (0.0..=1.0).contains(&u),
@@ -265,7 +239,6 @@ mod tests {
     fn reconstruct_alpha_beta(u: DutyCycle, v: DutyCycle, w: DutyCycle) -> (f32, f32) {
         let (u, v, w) = (u.value, v.value, w.value);
         let common = (u + v + w) / 3.0;
-        // We are operating on potential not on current, but the math is unit agnostic
         let v_u = ElectricCurrent::from_f32(u - common);
         let v_v = ElectricCurrent::from_f32(v - common);
         let v_w = ElectricCurrent::from_f32(w - common);

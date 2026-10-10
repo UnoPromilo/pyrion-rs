@@ -1,7 +1,7 @@
 #[cfg(feature = "board")]
 use embassy_stm32::peripherals::{
-    ADC1, ADC2, ADC3, ADC4, ADC5, DMA1_CH1, DMA1_CH2, DMA1_CH3, DMA1_CH4, DMA1_CH5, DMA1_CH6,
-    DMA1_CH7, DMA1_CH8, DMA2_CH1, DMA2_CH2, FDCAN2, I2C4, USART1, USB,
+    ADC1, ADC3, ADC5, DMA1_CH1, DMA1_CH2, DMA1_CH3, DMA1_CH4, DMA1_CH5, DMA1_CH6, DMA1_CH7,
+    DMA1_CH8, DMA2_CH1, DMA2_CH2, FDCAN2, I2C4, USART1, USB,
 };
 #[cfg(feature = "board")]
 use embassy_stm32::{bind_interrupts, can, dma, exti, i2c, usart, usb};
@@ -13,9 +13,8 @@ use embassy_stm32::{bind_interrupts, usb};
 
 #[cfg(feature = "board")]
 bind_interrupts!(pub struct Irqs{
-    ADC1_2 => drivers::adc::MultiInterruptHandler<ADC1, ADC2>;
+    ADC1_2 => drivers::adc::SingleInterruptHandler<ADC1>;
     ADC3 => drivers::adc::SingleInterruptHandler<ADC3>;
-    ADC4 => drivers::adc::SingleInterruptHandler<ADC4>;
     ADC5 => drivers::adc::SingleInterruptHandler<ADC5>;
 
     I2C4_EV => i2c::EventInterruptHandler<I2C4>;

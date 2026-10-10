@@ -46,6 +46,7 @@ ACTION_DFU=""
 RUN_SERVER=0
 ATTACH_LOGS=0
 BOARD=""
+FW_EXTRA_FEATURES=""
 
 VALID_BOARDS=("ovo" "nullo")
 FW_FEATURE_ARGS=()
@@ -63,7 +64,9 @@ validate_board() {
 build_firmware_feature_args() {
     FW_FEATURE_ARGS=()
     if [[ -n "$BOARD" ]]; then
-        FW_FEATURE_ARGS=("--no-default-features" "--features" "board-pyrion-$BOARD")
+        FW_FEATURE_ARGS=("--no-default-features" "--features" "board-pyrion-$BOARD${FW_EXTRA_FEATURES:+,$FW_EXTRA_FEATURES}")
+    elif [[ -n "$FW_EXTRA_FEATURES" ]]; then
+        FW_FEATURE_ARGS=("--features" "$FW_EXTRA_FEATURES")
     fi
 }
 
@@ -104,6 +107,8 @@ Commands:
 Options:
   --board NAME        Board profile for firmware/dfu (default: firmware default).
                       Valid: ${VALID_BOARDS[*]}. Ignored by the bootloader.
+  --features FEATURES Comma-separated extra Cargo features for firmware/dfu.
+                      Ignored by the bootloader.
 EOF
 }
 
@@ -216,6 +221,20 @@ while [[ $# -gt 0 ]]; do
         --board=*)
             BOARD="${1#*=}"
             validate_board "$BOARD"
+            shift
+            ;;
+        --features)
+            if [[ -z "${2:-}" || "$2" == -* ]]; then
+                error "--features requires a comma-separated feature list."
+            fi
+            FW_EXTRA_FEATURES="$2"
+            shift 2
+            ;;
+        --features=*)
+            FW_EXTRA_FEATURES="${1#*=}"
+            if [[ -z "$FW_EXTRA_FEATURES" ]]; then
+                error "--features requires a comma-separated feature list."
+            fi
             shift
             ;;
         -h|--help|help)

@@ -1,25 +1,21 @@
-use crate::adc::injected::AnyExtTrigger;
+use crate::adc::AdcInstance;
 use crate::adc::injected::pac::ModifyPac;
 use crate::adc::injected::running::Running;
 use crate::adc::interrupt::InterruptHandler;
-use crate::adc::{AdcInstance, Continuous, EndOfConversionSignal, Single};
-use crate::define_channels_mod;
 use core::marker::PhantomData;
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Binding;
 use logging::debug;
 use stm32_metapac::adc::vals::SampleTime;
 
-define_channels_mod!(channels, [1, 2, 3, 4]);
-
-pub struct Configured<I: AdcInstance, C> {
-    _phantom: PhantomData<(I, C)>,
+pub struct Configured<I: AdcInstance> {
+    _phantom: PhantomData<I>,
 }
 
-impl<I: AdcInstance> Configured<I, Single> {
-    #[allow(dead_code)]
-    pub(crate) fn new_single() -> Self {
-        I::set_software_trigger();
+impl<I: AdcInstance> Configured<I> {
+    pub(crate) fn new_tim1_triggered() -> Self {
+        debug!("Configuring injected {} on TIM1_TRGO", I::get_name());
+        I::set_tim1_trigger();
         I::set_discontinuous_mode(false);
         I::set_auto_conversion_mode(false);
         Self {
@@ -27,60 +23,14 @@ impl<I: AdcInstance> Configured<I, Single> {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn prepare<const CHANNELS: usize, H>(
+    pub fn start<H>(
         self,
-        sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
+        sequence: [(AnyAdcChannel<I>, SampleTime); 2],
         _irq: impl Binding<I::Interrupt, H>,
-    ) -> Running<I, Single, CHANNELS>
+    ) -> Running<I>
     where
-        channels::ConstU<CHANNELS>: channels::Channels,
         H: InterruptHandler<I::Interrupt>,
     {
-        Running::<I, Single, CHANNELS>::new(self, sequence)
-    }
-}
-
-impl<I: AdcInstance> Configured<I, Continuous> {
-    #[allow(dead_code)]
-    pub(crate) fn new_triggered(trigger: AnyExtTrigger) -> Self {
-        debug!(
-            "Configuring injected {} triggered on {}",
-            I::get_name(),
-            trigger
-        );
-        I::set_ext_trigger(trigger);
-        I::set_discontinuous_mode(false);
-        I::set_auto_conversion_mode(false);
-        I::clear_end_of_conversion_signal(EndOfConversionSignal::Both);
-        I::set_end_of_conversion_signal(EndOfConversionSignal::Sequence);
-        Self {
-            _phantom: PhantomData,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn new_auto() -> Self {
-        debug!("Configuring injected {} auto", I::get_name(),);
-        I::set_software_trigger();
-        I::set_discontinuous_mode(false);
-        I::set_auto_conversion_mode(true);
-        I::clear_end_of_conversion_signal(EndOfConversionSignal::Both);
-        I::set_end_of_conversion_signal(EndOfConversionSignal::Sequence);
-        Self {
-            _phantom: PhantomData,
-        }
-    }
-
-    pub fn start<const CHANNELS: usize, H>(
-        self,
-        sequence: [(AnyAdcChannel<I>, SampleTime); CHANNELS],
-        _irq: impl Binding<I::Interrupt, H>,
-    ) -> Running<I, Continuous, CHANNELS>
-    where
-        channels::ConstU<CHANNELS>: channels::Channels,
-        H: InterruptHandler<I::Interrupt>,
-    {
-        Running::<I, Continuous, CHANNELS>::new(self, sequence)
+        Running::new(self, sequence)
     }
 }

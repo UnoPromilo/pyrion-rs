@@ -11,11 +11,11 @@ use crc_engine::hardware::HardwareCrcEngine;
 #[cfg(feature = "cap-six-pwm-tim1")]
 use drivers::SixPwmTim1;
 #[cfg(feature = "board")]
-use drivers::adc::{Adc, Continuous, Taken};
+use drivers::adc::{Adc, Taken};
 #[cfg(feature = "cap-six-pwm-tim1")]
 use embassy_stm32::peripherals::TIM1;
 #[cfg(feature = "board")]
-use embassy_stm32::peripherals::{ADC1, ADC2, ADC3, ADC4, ADC5};
+use embassy_stm32::peripherals::{ADC1, ADC2, ADC3, ADC5};
 
 #[cfg(any(feature = "cap-voltage-filter", feature = "cap-current-filter"))]
 use crate::SenseFilter;
@@ -64,17 +64,21 @@ pub struct Board<'a> {
 
 #[cfg(feature = "board")]
 pub struct BoardAdc<'a> {
+    pub fast: BoardAdcFast<'a>,
+    pub slow_vref: drivers::adc::slow_vref::SlowVref<'a>,
+    /// Dropping ADC2's Embassy ring can disable ADC1's shared ADC12 clock.
+    pub slow_aux: embassy_stm32::adc::RingBufferedAdc<'a, ADC2>,
+}
+
+#[cfg(feature = "board")]
+pub struct BoardAdcFast<'a> {
     pub _adc1: Adc<'a, ADC1, Taken>,
-    pub _adc2: Adc<'a, ADC2, Taken>,
     pub _adc3: Adc<'a, ADC3, Taken>,
-    pub _adc4: Adc<'a, ADC4, Taken>,
     pub _adc5: Adc<'a, ADC5, Taken>,
 
-    pub adc1_running: drivers::adc::injected::Running<'a, ADC1, Continuous, 3>,
-    pub adc2_running: drivers::adc::injected::Running<'a, ADC2, Continuous, 3>,
-    pub adc3_running: drivers::adc::injected::Running<'a, ADC3, Continuous, 2>,
-    pub adc4_running: drivers::adc::injected::Running<'a, ADC4, Continuous, 1>,
-    pub adc5_running: drivers::adc::injected::Running<'a, ADC5, Continuous, 2>,
+    pub adc1_running: drivers::adc::injected::Running<'a, ADC1>,
+    pub adc3_running: drivers::adc::injected::Running<'a, ADC3>,
+    pub adc5_running: drivers::adc::injected::Running<'a, ADC5>,
 }
 
 #[cfg(feature = "cap-can")]

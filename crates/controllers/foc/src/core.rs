@@ -4,7 +4,6 @@ use crate::snapshot::{FocInput, FocOutput};
 use crate::space_vector_modulation::alternate_reverse_space_vector_modulation;
 use crate::state::FocState;
 
-// TODO make sure the alpha beta to V_Bus / sqrt(3)
 pub fn foc_step(input: FocInput, state: &mut FocState) -> FocOutput {
     let (alpha, beta) = balanced_clarke_transformation(input.u, input.v, input.w);
 
@@ -16,6 +15,6 @@ pub fn foc_step(input: FocInput, state: &mut FocState) -> FocOutput {
     let q_ref = state.iq_pi.step(q_error);
 
     let (alpha, beta) = inverse_park_transformation(d_ref, q_ref, input.angle.sin, input.angle.cos);
-    let (u, v, w) = alternate_reverse_space_vector_modulation(alpha, beta, input.v_bus);
+    let (u, v, w) = alternate_reverse_space_vector_modulation(alpha, beta);
     FocOutput { u, v, w }
 }

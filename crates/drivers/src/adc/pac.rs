@@ -1,7 +1,6 @@
 use crate::adc::pac_instance::PacInstance;
-use crate::adc::{DataAlignment, GainCompensation, OversamplingRatio, OversamplingShift};
 use embassy_time::{Duration, block_for};
-use stm32_metapac::adc::vals::{Adcaldif, Difsel, Dmacfg, Exten, Ovrmod, Res, Rovsm, Trovs};
+use stm32_metapac::adc::vals::{Adcaldif, Difsel, Exten};
 
 pub trait RegManipulations {
     fn power_up();
@@ -9,23 +8,6 @@ pub trait RegManipulations {
     fn calibrate(val: Adcaldif);
     fn enable();
     fn configure_single_conv_soft_trigger();
-    fn set_resolution(val: Res);
-
-    fn set_data_align(val: DataAlignment);
-    fn set_gain_compensation(val: GainCompensation);
-    fn set_low_power_auto_wait_mode(enabled: bool);
-    fn set_dma_config(val: Dmacfg);
-    fn set_overrun(val: Ovrmod);
-    fn set_common_oversampling(shift: OversamplingShift, ratio: OversamplingRatio);
-    fn set_regular_oversampling_modes(regular_mode: Rovsm, triggered_mode: Trovs);
-    fn set_regular_oversampling_enabled(val: bool);
-    fn set_injected_oversampling_enabled(val: bool);
-    fn is_vrefint_enabled() -> bool;
-    fn is_temperature_enabled() -> bool;
-    fn is_vbat_enabled() -> bool;
-    fn enable_vrefint();
-    fn enable_temperature();
-    fn enable_vbat();
 }
 
 impl<T: PacInstance> RegManipulations for T {
@@ -72,80 +54,5 @@ impl<T: PacInstance> RegManipulations for T {
             reg.set_cont(false);
             reg.set_exten(Exten::DISABLED);
         });
-    }
-
-    fn set_resolution(val: Res) {
-        Self::regs().cfgr().modify(|reg| reg.set_res(val));
-    }
-
-    fn set_data_align(val: DataAlignment) {
-        Self::regs().cfgr().modify(|reg| {
-            reg.set_align(val.into());
-        });
-    }
-
-    fn set_gain_compensation(val: GainCompensation) {
-        Self::regs().cfgr2().modify(|reg| reg.set_gcomp(val.0 != 0));
-        Self::regs().gcomp().modify(|reg| reg.set_gcompcoeff(val.0));
-    }
-
-    fn set_low_power_auto_wait_mode(enabled: bool) {
-        Self::regs().cfgr().modify(|reg| reg.set_autdly(enabled));
-    }
-
-    fn set_dma_config(val: Dmacfg) {
-        Self::regs().cfgr().modify(|reg| reg.set_dmacfg(val));
-    }
-
-    fn set_overrun(val: Ovrmod) {
-        Self::regs().cfgr().modify(|reg| reg.set_ovrmod(val));
-    }
-
-    fn set_common_oversampling(shift: OversamplingShift, ratio: OversamplingRatio) {
-        Self::regs().cfgr2().modify(|reg| {
-            reg.set_ovss(shift.into());
-            reg.set_ovsr(ratio.into());
-        });
-    }
-
-    fn set_regular_oversampling_modes(regular_mode: Rovsm, triggered_mode: Trovs) {
-        Self::regs().cfgr2().modify(|reg| {
-            reg.set_rovsm(regular_mode);
-            reg.set_trovs(triggered_mode);
-        });
-    }
-
-    fn set_regular_oversampling_enabled(val: bool) {
-        Self::regs().cfgr2().modify(|reg| reg.set_rovse(val));
-    }
-
-    fn set_injected_oversampling_enabled(val: bool) {
-        Self::regs().cfgr2().modify(|reg| reg.set_jovse(val));
-    }
-
-    fn is_vrefint_enabled() -> bool {
-        Self::common_regs().ccr().read().vrefen()
-    }
-
-    fn is_temperature_enabled() -> bool {
-        Self::common_regs().ccr().read().vsenseen()
-    }
-
-    fn is_vbat_enabled() -> bool {
-        Self::common_regs().ccr().read().vbaten()
-    }
-
-    fn enable_vrefint() {
-        Self::common_regs().ccr().modify(|reg| reg.set_vrefen(true));
-    }
-
-    fn enable_temperature() {
-        Self::common_regs()
-            .ccr()
-            .modify(|reg| reg.set_vsenseen(true))
-    }
-
-    fn enable_vbat() {
-        Self::common_regs().ccr().modify(|reg| reg.set_vbaten(true))
     }
 }

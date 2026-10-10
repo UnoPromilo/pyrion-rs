@@ -10,13 +10,6 @@ pub struct RawSnapshot {
     pub v_w: u16,
 
     pub v_ref: u16,
-    pub v_bus: u16,
-
-    pub temp_cpu: u16,
-    pub temp_motor: u16,
-    pub temp_driver: u16,
-
-    pub analog_input: u16,
 
     pub max_duty: u32,
 

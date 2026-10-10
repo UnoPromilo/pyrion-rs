@@ -1,3 +1,4 @@
+use crate::adc::epoch::TriggerEpoch;
 use embassy_stm32::peripherals;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
@@ -17,16 +18,18 @@ macro_rules! impl_with_state {
     }
 }
 
-impl_with_state!(
-    peripherals::ADC1,
-    peripherals::ADC2,
-    peripherals::ADC3,
-    peripherals::ADC4,
-    peripherals::ADC5
-);
+impl_with_state!(peripherals::ADC1, peripherals::ADC3, peripherals::ADC5);
 
 pub struct State {
-    pub jeos_signal: Signal<CriticalSectionRawMutex, [u16; 4]>,
+    pub jeos_signal: Signal<CriticalSectionRawMutex, TaggedResult>,
+}
+
+#[derive(Clone, Copy)]
+pub struct TaggedResult {
+    pub epoch: TriggerEpoch,
+    pub values: [u16; 2],
+    #[cfg(feature = "adc-timing")]
+    pub sequence: u32,
 }
 
 impl Default for State {

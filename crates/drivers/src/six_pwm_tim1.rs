@@ -100,4 +100,12 @@ impl<'a, T: AdvancedInstance4Channel> SixPwmTim1<'a, T> {
                 .modify(|reg| reg.set_mms(Mms::COMPARE_OC4))
         }
     }
+
+    pub fn enable_adc_trigger_interrupt(&mut self) {
+        unsafe {
+            let timer = pac::timer::TimAdv::from_ptr(T::regs());
+            timer.sr().modify(|reg| reg.set_ccif(3, false));
+            timer.dier().modify(|reg| reg.set_ccie(3, true));
+        }
+    }
 }

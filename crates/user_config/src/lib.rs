@@ -15,7 +15,7 @@ pub struct UserConfig {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum ShaftPositionDetector {
-    OpenLoop, 
+    OpenLoop,
     #[cfg(feature = "cap-external-i2c")]
     AS5600,
 }
@@ -24,7 +24,7 @@ impl Default for UserConfig {
     // TODO load from flash
     fn default() -> Self {
         Self {
-            pwm_frequency: khz(40),
+            pwm_frequency: khz(30),
             onboard_i2c_frequency: khz(100),
             external_i2c_frequency: khz(100),
             external_spi_frequency: mhz(1),

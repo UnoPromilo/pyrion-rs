@@ -1,77 +1,27 @@
+use crate::adc::AdcInstance;
+use crate::adc::epoch::TriggerEpoch;
 use crate::adc::injected::Configured;
-use crate::adc::injected::pac::{ModifyPac, ReadPac};
-use crate::adc::{AdcInstance, Continuous, EndOfConversionSignal, Single};
+use crate::adc::injected::pac::ModifyPac;
+use crate::adc::state::TaggedResult;
 use embassy_stm32::adc::AnyAdcChannel;
 use embassy_stm32::interrupt::typelevel::Interrupt;
-use logging::debug;
-use logging::trace;
+use logging::{debug, trace};
 use stm32_metapac::adc::vals::SampleTime;
 
-pub struct Running<'a, I: AdcInstance, C, const CHANNELS: usize> {
-    configured: Configured<I, C>,
-    channels: [AnyAdcChannel<'a, I>; CHANNELS],
+pub struct Running<'a, I: AdcInstance> {
+    _configured: Configured<I>,
+    _channels: [AnyAdcChannel<'a, I>; 2],
 }
 
-impl<'a, I: AdcInstance, const CHANNELS: usize> Running<'a, I, Single, CHANNELS> {
+impl<'a, I: AdcInstance> Running<'a, I> {
     pub(crate) fn new(
-        configured: Configured<I, Single>,
-        sequence: [(AnyAdcChannel<'a, I>, SampleTime); CHANNELS],
+        configured: Configured<I>,
+        sequence: [(AnyAdcChannel<'a, I>, SampleTime); 2],
     ) -> Self {
-        Self::inner_new(configured, sequence)
-    }
-
-    pub async fn trigger_and_read(&self) -> [u16; CHANNELS] {
-        I::start();
-        let result = I::state().jeos_signal.wait().await;
-        I::stop();
-
-        let mut values = [0; CHANNELS];
-        values[..CHANNELS].copy_from_slice(&result[..CHANNELS]);
-        values
-    }
-}
-
-impl<'a, I: AdcInstance, const CHANNELS: usize> Running<'a, I, Continuous, CHANNELS> {
-    pub(crate) fn new(
-        configured: Configured<I, Continuous>,
-        sequence: [(AnyAdcChannel<'a, I>, SampleTime); CHANNELS],
-    ) -> Self {
-        let instance = Self::inner_new(configured, sequence);
-        if !I::regs().cfgr().read().jauto() {
-            debug!("Injected {} started", I::get_name(),);
-            I::start();
-        } else {
-            debug!("Injected {} started in auto mode", I::get_name(),);
-        }
-        instance
-    }
-
-    /// Reads the value of the latest conversion
-    pub fn read_now(&self) -> [u16; CHANNELS] {
-        let mut values = [0; CHANNELS];
-        for (i, item) in values.iter_mut().enumerate() {
-            *item = I::read_value(i);
-        }
-        values
-    }
-
-    pub async fn read_next(&self) -> [u16; CHANNELS] {
-        let result = I::state().jeos_signal.wait().await;
-        let mut values = [0; CHANNELS];
-        values.copy_from_slice(&result[..CHANNELS]);
-        values
-    }
-}
-
-impl<'a, I: AdcInstance, C, const CHANNELS: usize> Running<'a, I, C, CHANNELS> {
-    fn inner_new(
-        configured: Configured<I, C>,
-        sequence: [(AnyAdcChannel<'a, I>, SampleTime); CHANNELS],
-    ) -> Self {
-        I::set_length(CHANNELS as u8 - 1);
+        I::set_length(1);
         for (index, (channel, sample_time)) in sequence.iter().enumerate() {
             trace!(
-                "Registering interrupted channel {} (index: {}) with sample time {:?}",
+                "Registering injected channel {} (index: {}) with sample time {:?}",
                 channel.get_hw_channel(),
                 index,
                 sample_time
@@ -81,18 +31,29 @@ impl<'a, I: AdcInstance, C, const CHANNELS: usize> Running<'a, I, C, CHANNELS> {
         }
         let channels = sequence.map(|(ch, _)| ch);
 
-        I::clear_end_of_conversion_signal(EndOfConversionSignal::Both);
-        I::set_end_of_conversion_signal(EndOfConversionSignal::Sequence);
+        I::clear_jeos();
+        I::enable_jeos_interrupt();
         unsafe { I::Interrupt::enable() }
+        debug!("Injected {} started", I::get_name());
+        I::start();
 
         Self {
-            configured,
-            channels,
+            _configured: configured,
+            _channels: channels,
         }
     }
-    pub fn release(self) -> (Configured<I, C>, [AnyAdcChannel<'a, I>; CHANNELS]) {
-        I::stop();
-        I::set_end_of_conversion_signal(EndOfConversionSignal::None);
-        (self.configured, self.channels)
+
+    pub async fn read_next_tagged(&self) -> TaggedRead {
+        let result = I::state().jeos_signal.wait().await;
+        #[cfg(feature = "adc-timing")]
+        crate::adc::timing::record_delivery(I::EPOCH_ADC.index(), result.sequence);
+        let TaggedResult { epoch, values, .. } = result;
+        TaggedRead { epoch, values }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TaggedRead {
+    pub epoch: TriggerEpoch,
+    pub values: [u16; 2],
 }

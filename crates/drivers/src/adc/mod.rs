@@ -1,16 +1,13 @@
-// TODO rewrite adc driver to have only required items and remove need for future joining
-
 mod adc;
-mod channels_macro;
-mod config;
+pub mod epoch;
 pub mod injected;
 mod interrupt;
 mod pac;
 mod pac_instance;
-mod prescaler;
+pub mod slow_vref;
 mod state;
-pub mod trigger_edge;
+#[cfg(feature = "adc-timing")]
+pub mod timing;
 
 pub use adc::*;
-pub use config::*;
-pub use interrupt::{MultiInterruptHandler, SingleInterruptHandler};
+pub use interrupt::SingleInterruptHandler;

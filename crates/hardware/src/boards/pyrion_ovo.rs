@@ -35,8 +35,8 @@ impl Board<'static> {
         let crc = HardwareCrcEngine::new(p.CRC);
 
         let adc = super::build_adc(
-            p.ADC1, p.ADC2, p.ADC3, p.ADC4, p.ADC5, p.PA1, p.PA2, p.PA3, p.PB11, p.PC3, p.PB2,
-            p.PB0, p.PB1, p.PA9, p.PA8,
+            p.ADC1, p.ADC2, p.ADC3, p.ADC4, p.ADC5, p.DMA1_CH2, p.DMA1_CH3, p.PA1, p.PA2, p.PA3,
+            p.PB11, p.PC3, p.PB2, p.PB0, p.PB1, p.PA9, p.PA8,
         );
 
         let pwm = SixPwmTim1::new(

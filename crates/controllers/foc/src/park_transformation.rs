@@ -1,4 +1,4 @@
-use units::{ElectricCurrent, ElectricPotential};
+use units::{ElectricCurrent, Ratio};
 
 pub fn park_transformation(
     alpha: ElectricCurrent,
@@ -13,10 +13,10 @@ pub fn park_transformation(
 }
 
 pub fn inverse_park_transformation(
-    d: ElectricPotential,
-    q: ElectricPotential,
+    d: Ratio,
+    q: Ratio,
     angle_sin: f32,
     angle_cos: f32,
-) -> (ElectricPotential, ElectricPotential) {
+) -> (Ratio, Ratio) {
     (d * angle_cos - q * angle_sin, d * angle_sin + q * angle_cos)
 }

@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-adc = ["dep:embassy-stm32", "dep:stm32-metapac", "dep:embassy-sync", "dep:embassy-time", "dep:logging"]
+adc = ["dep:embassy-stm32", "dep:stm32-metapac", "dep:embassy-sync", "dep:embassy-time", "dep:logging", "dep:critical-section"]
+adc-timing = ["adc", "dep:cortex-m"]
 as5600 = ["dep:embedded-hal-async", "dep:logging"]
 six-pwm-tim1 = ["dep:embassy-stm32", "dep:stm32-metapac", "dep:logging"]
 log = ["logging?/log", "embassy-sync?/log", "embassy-time?/log"]
@@ -23,6 +24,8 @@ embedded-hal-async = { version = "1.0.0", optional = true }
 logging = { path = "../utils/logging", optional = true }
 drv8301-dd = { version = "=0.3.0", optional = true }
 units = { path = "../utils/units", optional = true }
+critical-section = { version = "1.1", optional = true }
+cortex-m = { version = "0.7.6", optional = true }
 
 [dev-dependencies]
 drv8301-dd = "=0.3.0"

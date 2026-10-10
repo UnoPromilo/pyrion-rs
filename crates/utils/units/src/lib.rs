@@ -12,6 +12,7 @@ use uom::si::electric_potential::volt;
 pub use uom::si::f32::AngularVelocity;
 pub use uom::si::f32::Ratio;
 pub use uom::si::f32::*;
+use uom::si::ratio::ratio;
 use uom::si::thermodynamic_temperature::kelvin;
 
 pub type DutyCycle = Ratio;
@@ -37,6 +38,7 @@ macro_rules! impl_atomic_unit_type {
 
 impl_atomic_unit_type!(ElectricPotential, volt);
 impl_atomic_unit_type!(ElectricCurrent, ampere);
+impl_atomic_unit_type!(Ratio, ratio);
 impl_atomic_unit_type!(ThermodynamicTemperature, kelvin);
 
 pub struct AtomicUnit<T: F32UnitType> {

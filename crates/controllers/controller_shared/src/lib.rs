@@ -8,7 +8,7 @@ mod core;
 mod io;
 pub mod state;
 pub mod strategy;
-pub use core::control_step;
+pub use core::{control_step, store_bus_voltage};
 pub use io::*;
 pub mod command;
 pub mod output;

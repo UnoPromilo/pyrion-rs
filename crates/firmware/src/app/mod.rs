@@ -9,7 +9,9 @@ mod shaft_position;
 mod uart;
 mod usb;
 
-pub use adc::task_adc;
+#[cfg(feature = "adc-timing")]
+pub use adc::task_adc_timing_report;
+pub use adc::{task_adc, task_slow_aux, task_slow_vref};
 pub use communication::task_communication;
 pub use communication::{COMMAND_CHANNEL, EVENT_CHANNEL};
 pub use leds::task_leds;

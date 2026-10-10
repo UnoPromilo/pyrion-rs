@@ -1,79 +1,43 @@
+use crate::adc::injected;
 use crate::adc::pac::RegManipulations;
 use crate::adc::pac_instance::PacInstance;
-use crate::adc::prescaler::Prescaler;
 use crate::adc::state::WithState;
-use crate::adc::trigger_edge::ExtTriggerEdge;
-use crate::adc::{Config, injected};
 use core::marker::PhantomData;
-use embassy_stm32::adc::{Temperature, Vbat, VrefInt};
-use embassy_stm32::time::Hertz;
 use embassy_stm32::{Peri, peripherals, rcc};
 use logging::debug;
-use stm32_metapac::adc::vals::{Adcaldif, Difsel};
-use stm32_metapac::adccommon::vals::Presc;
-// TODO add analog watchdog
-
-pub trait AdcFamily {
-    type InjectedExtTrigger: injected::IntoAnyExtTrigger;
-}
-pub struct Family12;
-pub struct Family345;
-
-impl AdcFamily for Family12 {
-    type InjectedExtTrigger = injected::ExtTriggerSourceADC12;
-}
-impl AdcFamily for Family345 {
-    type InjectedExtTrigger = injected::ExtTriggerSourceADC345;
-}
+use stm32_metapac::adc::vals::{Adcaldif, Difsel, Dmacfg, Ovrmod, Res};
 
 pub trait AdcInstance: PacInstance + WithState {
-    type Family: AdcFamily;
     fn get_name() -> &'static str;
+    const EPOCH_ADC: crate::adc::epoch::FastAdc;
 }
+
 macro_rules! adc_instance {
-    ($($adc:ident => $family:ty),+) => {
+    ($($adc:ident => $index:ident),+) => {
         $(impl AdcInstance for peripherals::$adc {
-            type Family = $family;
             fn get_name() -> &'static str {
                 stringify!($adc)
             }
+            const EPOCH_ADC: crate::adc::epoch::FastAdc = crate::adc::epoch::FastAdc::$index;
         })+
     }
 }
 
-adc_instance!(
-    ADC1 => Family12,
-    ADC2 => Family12,
-    ADC3 => Family345,
-    ADC4 => Family345,
-    ADC5 => Family345
-);
+adc_instance!(ADC1 => Adc1, ADC3 => Adc3, ADC5 => Adc5);
 
 pub struct Free;
 pub struct Taken;
 
-pub struct Single;
-pub struct Continuous;
-
-pub struct Adc<'d, T: AdcInstance, I = Free, R = Free> {
-    #[allow(unused)]
+pub struct Adc<'d, T: AdcInstance, I = Free> {
     adc: Peri<'d, T>,
-
-    _phantom_data: PhantomData<(I, R)>,
+    _phantom_data: PhantomData<I>,
 }
 
-impl<'d, T> Adc<'d, T>
-where
-    T: AdcInstance,
-{
-    pub fn new(adc: Peri<'d, T>, config: Config) -> Self {
+impl<'d, T: AdcInstance> Adc<'d, T> {
+    /// Joining an enabled RCC group must not reset another ADC in that group.
+    pub fn new_in_enabled_group(adc: Peri<'d, T>) -> Self {
+        critical_section::with(|cs| rcc::enable_with_cs::<T>(cs));
         debug!("Configuring {}", T::get_name());
-        rcc::enable_and_reset::<T>();
-        let freq = rcc::frequency::<T>();
-        let presc = Presc::from_kernel_clock(freq);
-        T::common_regs().ccr().modify(|w| w.set_presc(presc));
-        let freq = Hertz::hz(freq.0 / presc.divisor());
-        debug!("{} frequency set to {}", T::get_name(), freq);
 
         T::power_up();
         T::set_difsel_all(Difsel::SINGLE_ENDED);
@@ -81,114 +45,32 @@ where
         T::calibrate(Adcaldif::DIFFERENTIAL);
         T::enable();
         T::configure_single_conv_soft_trigger();
-        T::set_resolution(config.resolution);
-        T::set_data_align(config.dataline_alignment);
-        T::set_gain_compensation(config.gain_compensation);
-        T::set_low_power_auto_wait_mode(config.enable_low_power_auto_wait);
-        T::set_dma_config(config.dma_config);
-        T::set_overrun(config.overrun_mode);
-        T::set_common_oversampling(
-            config.oversampling_config.shift,
-            config.oversampling_config.ratio,
-        );
-        T::set_regular_oversampling_modes(
-            config.oversampling_config.regular_mode,
-            config.oversampling_config.triggered_mode,
-        );
-        T::set_regular_oversampling_enabled(config.oversampling_config.enable_regular_oversampling);
-        T::set_injected_oversampling_enabled(
-            config.oversampling_config.enable_injected_oversampling,
-        );
+        T::regs().cfgr().modify(|reg| {
+            reg.set_res(Res::BITS12);
+            reg.set_align(false);
+            reg.set_autdly(false);
+            reg.set_dmacfg(Dmacfg::ONE_SHOT);
+            reg.set_ovrmod(Ovrmod::PRESERVE);
+        });
+        T::regs().cfgr2().modify(|reg| {
+            reg.set_gcomp(false);
+            reg.set_rovse(false);
+            reg.set_jovse(false);
+        });
 
         Self {
             adc,
             _phantom_data: PhantomData,
         }
     }
-}
-// TODO add implementations for drop
-/*
-impl Drop for VrefInt {
-    fn drop(&mut self) {
-        T::disable_vrefint();
-    }
-}
 
-impl Drop for Temperature {
-    fn drop(&mut self) {
-        T::disable_temperature();
-    }
-}
-
-impl Drop for Vbat {
-    fn drop(&mut self) {
-        T::disable_vbat();
-    }
-}
-
-*/
-
-impl<'d, T: AdcInstance, R> Adc<'d, T, Free, R> {
-    pub fn configure_injected_ext_trigger(
-        self,
-        trigger: <T::Family as AdcFamily>::InjectedExtTrigger,
-        edge: ExtTriggerEdge,
-    ) -> (Adc<'d, T, Taken, R>, injected::Configured<T, Continuous>) {
+    pub fn configure_tim1_triggered(self) -> (Adc<'d, T, Taken>, injected::Configured<T>) {
         (
-            self.take_injected(),
-            injected::Configured::new_triggered(injected::IntoAnyExtTrigger::into(trigger, edge)),
+            Adc {
+                adc: self.adc,
+                _phantom_data: PhantomData,
+            },
+            injected::Configured::new_tim1_triggered(),
         )
-    }
-
-    pub fn configure_injected_auto(
-        self,
-    ) -> (Adc<'d, T, Taken, R>, injected::Configured<T, Continuous>) {
-        (self.take_injected(), injected::Configured::new_auto())
-    }
-
-    pub fn configure_injected_single_conversion(
-        self,
-    ) -> (Adc<'d, T, Taken, R>, injected::Configured<T, Single>) {
-        (self.take_injected(), injected::Configured::new_single())
-    }
-}
-
-impl<'d, T: AdcInstance, R> Adc<'d, T, Free, R> {
-    fn take_injected(self) -> Adc<'d, T, Taken, R> {
-        Adc {
-            adc: self.adc,
-            _phantom_data: PhantomData,
-        }
-    }
-}
-
-// TODO Add implementations for regular conversion
-impl<'d, T: AdcInstance, R, I> Adc<'d, T, I, R> {
-    pub fn enable_vrefint(&self) -> VrefInt {
-        if T::is_vrefint_enabled() {
-            panic!("Vrefint is already enabled");
-        }
-        T::enable_vrefint();
-
-        VrefInt {}
-    }
-
-    pub fn enable_temperature(&self) -> Temperature {
-        if T::is_temperature_enabled() {
-            panic!("Temperature is already enabled");
-        }
-        T::enable_temperature();
-
-        Temperature {}
-    }
-
-    pub fn enable_vbat(&self) -> Vbat {
-        if T::is_vbat_enabled() {
-            panic!("Vbat is already enabled");
-        }
-
-        T::enable_vbat();
-
-        Vbat {}
     }
 }

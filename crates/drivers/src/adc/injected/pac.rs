@@ -1,22 +1,17 @@
-use crate::adc::EndOfConversionSignal;
-use crate::adc::injected::AnyExtTrigger;
 use crate::adc::pac_instance::PacInstance;
 use embassy_stm32::adc::AnyAdcChannel;
-use stm32_metapac::adc::vals::{Adstp, Exten, SampleTime};
+use stm32_metapac::adc::vals::{Exten, SampleTime};
 
 pub trait ModifyPac {
-    fn set_software_trigger();
-    fn set_ext_trigger(trigger: AnyExtTrigger);
+    fn set_tim1_trigger();
     fn set_auto_conversion_mode(enabled: bool);
     fn set_length(length: u8);
     fn set_channel_sample_time<C>(channel: &AnyAdcChannel<C>, sample_time: SampleTime);
     fn register_channel<C>(channel: &AnyAdcChannel<C>, index: usize);
     fn set_discontinuous_mode(enabled: bool);
-    fn set_end_of_conversion_signal(val: EndOfConversionSignal);
-    fn clear_end_of_conversion_signal(val: EndOfConversionSignal);
-
+    fn enable_jeos_interrupt();
+    fn clear_jeos();
     fn start();
-    fn stop();
 }
 
 pub trait ReadPac {
@@ -24,24 +19,11 @@ pub trait ReadPac {
 }
 
 impl<T: PacInstance> ModifyPac for T {
-    fn set_software_trigger() {
+    fn set_tim1_trigger() {
         Self::regs().jsqr().modify(|reg| {
-            reg.set_jexten(Exten::DISABLED);
+            reg.set_jexten(Exten::RISING_EDGE);
             reg.set_jextsel(0);
         });
-    }
-
-    fn set_ext_trigger(trigger: AnyExtTrigger) {
-        match trigger {
-            AnyExtTrigger::ADC12(source, edge) => Self::regs().jsqr().modify(|reg| {
-                reg.set_jexten(edge.into());
-                reg.set_jextsel(source.into());
-            }),
-            AnyExtTrigger::ADC345(source, edge) => Self::regs().jsqr().modify(|reg| {
-                reg.set_jexten(edge.into());
-                reg.set_jextsel(source.into());
-            }),
-        }
     }
 
     fn set_auto_conversion_mode(enabled: bool) {
@@ -75,51 +57,19 @@ impl<T: PacInstance> ModifyPac for T {
         Self::regs().cfgr().modify(|reg| reg.set_jdiscen(enabled));
     }
 
-    fn set_end_of_conversion_signal(val: EndOfConversionSignal) {
-        Self::regs().ier().modify(|reg| match val {
-            EndOfConversionSignal::None => {
-                reg.set_jeosie(false);
-                reg.set_jeocie(false);
-            }
-            EndOfConversionSignal::Single => {
-                reg.set_jeosie(false);
-                reg.set_jeocie(true);
-            }
-            EndOfConversionSignal::Sequence => {
-                reg.set_jeosie(true);
-                reg.set_jeocie(false);
-            }
-            EndOfConversionSignal::Both => {
-                reg.set_jeosie(true);
-                reg.set_jeocie(true);
-            }
+    fn enable_jeos_interrupt() {
+        Self::regs().ier().modify(|reg| {
+            reg.set_jeosie(true);
+            reg.set_jeocie(false);
         });
     }
 
-    fn clear_end_of_conversion_signal(val: EndOfConversionSignal) {
-        Self::regs().isr().modify(|reg| match val {
-            EndOfConversionSignal::None => {}
-            EndOfConversionSignal::Single => {
-                reg.set_jeoc(true);
-            }
-            EndOfConversionSignal::Sequence => {
-                reg.set_jeos(true);
-            }
-            EndOfConversionSignal::Both => {
-                reg.set_jeoc(true);
-                reg.set_jeos(true);
-            }
-        });
+    fn clear_jeos() {
+        Self::regs().isr().modify(|reg| reg.set_jeos(true));
     }
 
     fn start() {
         Self::regs().cr().modify(|regs| regs.set_jadstart(true));
-    }
-
-    fn stop() {
-        Self::regs()
-            .cr()
-            .modify(|regs| regs.set_jadstp(Adstp::STOP));
     }
 }
 

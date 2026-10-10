@@ -4,7 +4,11 @@ mod core_board;
 #[cfg(feature = "board")]
 mod adc_builder;
 #[cfg(feature = "board")]
+mod adc_frame;
+#[cfg(feature = "board")]
 pub(crate) use adc_builder::build_adc;
+#[cfg(feature = "board")]
+pub use adc_frame::{AuxiliaryAdcCounts, BoardAdcFrame, FastAdcCounts, Phase};
 
 #[cfg(feature = "cap-drv8301")]
 fn drv8301_spi_config() -> embassy_stm32::spi::Config {

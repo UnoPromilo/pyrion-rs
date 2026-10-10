@@ -83,6 +83,8 @@ impl<D: InverterOutput> SafeOutput<D> {
                 Err(ArmError::FirmwareUpdatePending)
             }
             OutputState::Inhibited(_) => {
+                self.driver.disable_outputs();
+                self.driver.write_phase_duties(RawInverterValues::ZERO);
                 self.state = OutputState::ArmedSafe;
                 Ok(())
             }
@@ -92,7 +94,7 @@ impl<D: InverterOutput> SafeOutput<D> {
     }
 
     pub fn enter_armed_safe(&mut self) {
-        if matches!(self.state, OutputState::Inhibited(_)) {
+        if self.state != OutputState::Enabled {
             return;
         }
 
@@ -102,6 +104,10 @@ impl<D: InverterOutput> SafeOutput<D> {
     }
 
     pub fn inhibit(&mut self, cause: InhibitCause) {
+        // Startup access may have changed the hardware without changing the state.
+        if cause != InhibitCause::Startup && self.state == OutputState::Inhibited(cause) {
+            return;
+        }
         self.driver.disable_outputs();
         self.driver.write_phase_duties(RawInverterValues::ZERO);
         self.state = OutputState::Inhibited(cause);
@@ -195,6 +201,64 @@ mod tests {
     }
 
     #[test]
+    fn armed_safe_frames_do_not_repeat_hardware_writes() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.arm_after_preflight().unwrap();
+        output.driver.operations.clear();
+
+        output.enter_armed_safe();
+        output.enter_armed_safe();
+        output.arm_after_preflight().unwrap();
+
+        assert_eq!(output.state(), OutputState::ArmedSafe);
+        assert!(output.driver.operations.is_empty());
+    }
+
+    #[test]
+    fn arming_reapplies_safe_hardware_after_startup_access() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output
+            .with_startup_driver(|driver| driver.operations.push(Operation::Enable))
+            .unwrap();
+        output.driver.operations.clear();
+
+        output.arm_after_preflight().unwrap();
+
+        assert_eq!(output.state(), OutputState::ArmedSafe);
+        assert_eq!(
+            output.driver.operations,
+            [
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO)
+            ]
+        );
+    }
+
+    #[test]
+    fn repeated_inhibition_skips_writes_except_during_preflight() {
+        let mut output = SafeOutput::new(FakeDriver::new(1000));
+        output.driver.operations.clear();
+        output.inhibit(InhibitCause::Startup);
+        assert_eq!(
+            output.driver.operations,
+            [
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO)
+            ]
+        );
+
+        output.inhibit(InhibitCause::Fault);
+        output.driver.operations.clear();
+        output.inhibit(InhibitCause::Fault);
+        assert!(output.driver.operations.is_empty());
+
+        output.inhibit(InhibitCause::FirmwareUpdate);
+        output.driver.operations.clear();
+        output.inhibit(InhibitCause::FirmwareUpdate);
+        assert!(output.driver.operations.is_empty());
+    }
+
+    #[test]
     fn drive_is_rejected_until_explicitly_armed() {
         let mut output = SafeOutput::new(FakeDriver::new(1000));
         output.driver.operations.clear();
@@ -243,6 +307,8 @@ mod tests {
                 Operation::Disable,
                 Operation::Write(RawInverterValues::ZERO),
                 Operation::Disable,
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO),
                 Operation::Disable,
                 Operation::Write(RawInverterValues::ZERO),
                 Operation::Disable,
@@ -347,8 +413,16 @@ mod tests {
                 w: 300,
             })
             .unwrap();
+        output.driver.operations.clear();
         output.enter_armed_safe();
         assert_eq!(output.state(), OutputState::ArmedSafe);
+        assert_eq!(
+            output.driver.operations,
+            [
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO)
+            ]
+        );
         output.driver.operations.clear();
         let duties = RawInverterValues {
             u: 300,
@@ -399,6 +473,8 @@ mod tests {
         assert_eq!(
             output.driver.operations,
             [
+                Operation::Disable,
+                Operation::Write(RawInverterValues::ZERO),
                 Operation::Write(RawInverterValues {
                     u: 300,
                     v: 200,
