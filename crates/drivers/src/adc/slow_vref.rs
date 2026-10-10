@@ -18,6 +18,7 @@ pub enum SlowVrefError {
 pub struct SlowVref<'d> {
     ring: RingBufferedAdc<'d, ADC4>,
     last_nonzero: Option<u16>,
+    calibrated_value: u16,
 }
 
 impl<'d> SlowVref<'d> {
@@ -28,6 +29,7 @@ impl<'d> SlowVref<'d> {
         irq: impl Binding<D::Interrupt, InterruptHandler<D>> + 'd,
     ) -> Self {
         let vref = adc.enable_vrefint();
+        let calibrated_value = vref.calibrated_value();
         block_for(Duration::from_micros(12));
         let ring = adc.into_ring_buffered(
             dma,
@@ -41,6 +43,7 @@ impl<'d> SlowVref<'d> {
         let mut result = Self {
             ring,
             last_nonzero: None,
+            calibrated_value,
         };
         result.ring.start();
         result
@@ -62,5 +65,9 @@ impl<'d> SlowVref<'d> {
 
     pub fn snapshot(&self) -> Result<u16, SlowVrefError> {
         self.last_nonzero.ok_or(SlowVrefError::NoSample)
+    }
+
+    pub fn calibrated_value(&self) -> u16 {
+        self.calibrated_value
     }
 }

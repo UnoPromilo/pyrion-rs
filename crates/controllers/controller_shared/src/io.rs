@@ -17,6 +17,13 @@ pub struct RawSnapshot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CurrentZeroOffsets {
+    pub u: u16,
+    pub v: u16,
+    pub w: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RawInverterValues {
     pub u: u32,

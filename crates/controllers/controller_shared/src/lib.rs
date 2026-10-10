@@ -4,6 +4,7 @@
 extern crate std;
 
 mod converters;
+pub use converters::BoardSensorScales;
 mod core;
 mod io;
 pub mod state;

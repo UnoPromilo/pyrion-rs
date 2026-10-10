@@ -25,9 +25,9 @@ fn drv8301_spi_config() -> embassy_stm32::spi::Config {
 #[cfg(feature = "board-pyrion-ovo")]
 mod pyrion_ovo;
 #[cfg(feature = "board-pyrion-ovo")]
-pub use pyrion_ovo::{BOARD_ID, limits, validate_drv8301_configuration};
+pub use pyrion_ovo::{BOARD_ID, limits, sensor_scales, validate_drv8301_configuration};
 
 #[cfg(feature = "board-pyrion-nullo")]
 mod pyrion_nullo;
 #[cfg(feature = "board-pyrion-nullo")]
-pub use pyrion_nullo::{BOARD_ID, limits};
+pub use pyrion_nullo::{BOARD_ID, limits, sensor_scales};

@@ -6,6 +6,15 @@ static NEXT_DFU_REQUEST_ID: AtomicU32 = AtomicU32::new(1);
 static DFU_SHUTDOWN_STARTED: AtomicBool = AtomicBool::new(false);
 static DFU_SHUTDOWN_REQUEST: Signal<CriticalSectionRawMutex, u32> = Signal::new();
 static DFU_OUTPUT_INHIBITED: Signal<CriticalSectionRawMutex, u32> = Signal::new();
+static FAST_CONTROL_READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+
+pub(super) fn acknowledge_fast_control_ready() {
+    FAST_CONTROL_READY.signal(());
+}
+
+pub(super) async fn wait_for_fast_control_ready() {
+    FAST_CONTROL_READY.wait().await;
+}
 
 pub(super) fn request_dfu_shutdown() {
     DFU_SHUTDOWN_STARTED.store(true, Ordering::Release);

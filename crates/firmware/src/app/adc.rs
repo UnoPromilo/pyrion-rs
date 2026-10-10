@@ -1,11 +1,13 @@
 use crate::app::communication::CONTROL_COMMAND_CHANNEL;
-use crate::app::power_stage::{self, BoardOutput, UncheckedOutput};
+use crate::app::power_stage::{self, BoardOutput, GateRequest, UncheckedOutput};
 use crate::app::safety;
 use controller_shared::command::ControlCommand;
 use controller_shared::output::{InhibitCause, SafeOutput};
+use controller_shared::state::State;
 use controller_shared::strategy::ControlStrategy;
 use controller_shared::{
-    ControlFault, ControlOutput, RawInverterValues, RawSnapshot, control_step,
+    BoardSensorScales, ControlFault, ControlOutput, CurrentZeroOffsets, RawInverterValues,
+    RawSnapshot, control_step,
 };
 use core::num::NonZeroU16;
 use core::sync::atomic::{AtomicU16, Ordering};
@@ -13,7 +15,7 @@ use drivers::adc::epoch::{FrameAlignment, TriggerEpoch, align_fast_frame, is_inv
 use drivers::adc::injected::Running;
 use drivers::adc::slow_vref::{SlowVref, SlowVrefError};
 use embassy_futures::join::join3;
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{Either3, select3};
 use embassy_stm32::adc::RingBufferedAdc;
 use embassy_stm32::peripherals::{ADC1, ADC2, ADC3, ADC5};
 use embassy_time::{Duration, Instant, Timer, with_timeout};
@@ -21,12 +23,21 @@ use hardware::{AuxiliaryAdcCounts, BoardAdcFast, BoardAdcFrame};
 use logging::FreqMeter;
 use logging::error;
 use logging::fault_register::{FaultRegister, FaultState, FaultType};
+use user_config::UserConfig;
 
 static VREFINT_SNAPSHOT: AtomicU16 = AtomicU16::new(0);
+const FAST_STARTUP_TIMEOUT: Duration = Duration::from_millis(250);
 
 struct TriggeredFrame {
     epoch: TriggerEpoch,
     readings: BoardAdcFrame,
+}
+
+enum FastEvent {
+    Gate(GateRequest),
+    Command(ControlCommand),
+    AdcTimeout,
+    Frame(TriggeredFrame),
 }
 
 async fn read_triggered_frame(
@@ -98,14 +109,50 @@ async fn read_triggered_frame(
     }
 }
 
+async fn next_fast_event(
+    adc1: &Running<'_, ADC1>,
+    adc3: &Running<'_, ADC3>,
+    adc5: &Running<'_, ADC5>,
+    last_epoch: TriggerEpoch,
+) -> FastEvent {
+    let adc_read = with_timeout(
+        Duration::from_millis(1),
+        read_triggered_frame(adc1, adc3, adc5, last_epoch),
+    );
+    match select3(
+        power_stage::next_gate_request(),
+        CONTROL_COMMAND_CHANNEL.receive(),
+        adc_read,
+    )
+    .await
+    {
+        Either3::First(request) => FastEvent::Gate(request),
+        Either3::Second(command) => FastEvent::Command(command),
+        Either3::Third(Err(_)) => FastEvent::AdcTimeout,
+        Either3::Third(Ok(frame)) => FastEvent::Frame(frame),
+    }
+}
+
 #[embassy_executor::task]
-pub async fn task_slow_aux(mut adc: RingBufferedAdc<'static, ADC2>) {
+pub async fn task_slow_aux(
+    mut adc: RingBufferedAdc<'static, ADC2>,
+    vrefint_cal: u16,
+    sensor_scales: BoardSensorScales,
+) {
     loop {
         let mut samples = [0; 3];
         if adc.read_latest(&mut samples) == samples.len() {
             let auxiliary = AuxiliaryAdcCounts::from_regular(samples);
-            if let Some(vref) = NonZeroU16::new(VREFINT_SNAPSHOT.load(Ordering::Relaxed)) {
-                controller_shared::store_bus_voltage(auxiliary.bus_voltage, vref);
+            if let (Some(vref), Some(cal)) = (
+                NonZeroU16::new(VREFINT_SNAPSHOT.load(Ordering::Relaxed)),
+                NonZeroU16::new(vrefint_cal).filter(|cal| cal.get() <= 4095),
+            ) {
+                controller_shared::store_bus_voltage(
+                    auxiliary.bus_voltage,
+                    vref,
+                    cal,
+                    &sensor_scales,
+                );
             }
         }
         Timer::after_millis(1).await;
@@ -114,6 +161,12 @@ pub async fn task_slow_aux(mut adc: RingBufferedAdc<'static, ADC2>) {
 
 #[embassy_executor::task]
 pub async fn task_slow_vref(mut adc: SlowVref<'static>) {
+    if !(1..=4095).contains(&adc.calibrated_value()) {
+        error!(
+            "Invalid factory VREFINT calibration value: {}",
+            adc.calibrated_value()
+        );
+    }
     let mut previous_error = None;
     loop {
         match adc.poll_latest() {
@@ -133,168 +186,158 @@ pub async fn task_slow_vref(mut adc: SlowVref<'static>) {
     }
 }
 
-#[embassy_executor::task]
-pub async fn task_adc(adc: BoardAdcFast<'static>, pwm: UncheckedOutput) {
-    let adc_1 = adc.adc1_running;
-    let adc_3 = adc.adc3_running;
-    let adc_5 = adc.adc5_running;
-    let mut inverter = SafeOutput::new(BoardOutput::new(pwm));
-    let max_duty = inverter.max_duty();
-    let controller_state = controller_shared::state::state();
-    let faults = FaultRegister::shared();
+struct FastControl {
+    inverter: SafeOutput<BoardOutput>,
+    max_duty: u32,
+    current_zero: CurrentZeroOffsets,
+    vrefint_cal: u16,
+    sensor_scales: BoardSensorScales,
+    strategy: ControlStrategy,
+    last_epoch: TriggerEpoch,
+    startup_started: Instant,
+    first_valid_frame: bool,
+    startup_failed: bool,
+    ready_signaled: bool,
+}
 
-    let mut freq_meter = FreqMeter::named("ADC");
-    freq_meter.link(&controller_state.foc_loop_frequency);
+impl FastControl {
+    fn new(
+        inverter: SafeOutput<BoardOutput>,
+        current_zero: CurrentZeroOffsets,
+        vrefint_cal: u16,
+        sensor_scales: BoardSensorScales,
+    ) -> Self {
+        Self {
+            max_duty: inverter.max_duty(),
+            inverter,
+            current_zero,
+            vrefint_cal,
+            sensor_scales,
+            strategy: ControlStrategy::Disabled,
+            last_epoch: TriggerEpoch::UNSTARTED,
+            startup_started: Instant::now(),
+            first_valid_frame: false,
+            startup_failed: false,
+            ready_signaled: false,
+        }
+    }
 
-    let mut strategy = ControlStrategy::Disabled;
-    let mut last_epoch = TriggerEpoch::UNSTARTED;
-    let startup_started = Instant::now();
-    let mut first_valid_frame = false;
+    fn waiting_for_first_frame(&self) -> bool {
+        !self.first_valid_frame && self.startup_started.elapsed() < FAST_STARTUP_TIMEOUT
+    }
 
-    loop {
-        let start_time = Instant::now();
-        #[cfg(feature = "adc-timing")]
-        let mut observed_frame = None;
-        let adc_read = with_timeout(
-            Duration::from_millis(1),
-            read_triggered_frame(&adc_1, &adc_3, &adc_5, last_epoch),
-        );
+    fn decide_frame(
+        &mut self,
+        TriggeredFrame {
+            epoch,
+            readings: frame,
+        }: TriggeredFrame,
+        state: &State,
+        faults: &FaultRegister,
+    ) -> Option<Decision> {
+        let v_ref = VREFINT_SNAPSHOT.load(Ordering::Relaxed);
+        let missed = epoch.skipped_since(self.last_epoch);
+        if missed != 0 {
+            state.adc_missed_frames.fetch_add(missed, Ordering::Relaxed);
+        }
+        self.last_epoch = epoch;
+        faults.resolve_if_set(FaultType::AdcTimeout);
 
-        let requested_output = match select(
-            select(
-                power_stage::next_gate_request(),
-                CONTROL_COMMAND_CHANNEL.receive(),
-            ),
-            adc_read,
-        )
-        .await
-        {
-            Either::First(Either::First(request)) => {
-                power_stage::handle_request(request, &mut inverter);
-                continue;
-            }
-            Either::First(Either::Second(ControlCommand::Stop)) => {
-                strategy = ControlStrategy::Disabled;
-                RequestedOutput::ArmedSafe
-            }
-            Either::First(Either::Second(ControlCommand::InhibitForDfu { request_id })) => {
-                strategy = ControlStrategy::Disabled;
-                RequestedOutput::DfuInhibited { request_id }
-            }
-            Either::Second(Err(_))
-                if !first_valid_frame && startup_started.elapsed() < Duration::from_millis(10) =>
-            {
-                continue;
-            }
-            Either::Second(Err(_)) => {
+        if v_ref == 0 && self.waiting_for_first_frame() {
+            return None;
+        }
+        if !self.first_valid_frame && !self.waiting_for_first_frame() && !self.startup_failed {
+            self.startup_failed = true;
+            if v_ref == 0 {
+                error!("Fast control startup failed: VREFINT not ready");
+            } else {
                 faults.set(FaultType::AdcTimeout);
-                strategy = ControlStrategy::Disabled;
-                RequestedOutput::Inhibited(InhibitCause::Fault)
+                error!("Fast control startup failed: first ADC frame arrived after deadline");
             }
-            Either::Second(Ok(TriggeredFrame {
-                epoch,
-                readings: frame,
-            })) => {
-                let v_ref = VREFINT_SNAPSHOT.load(Ordering::Relaxed);
-                let missed = epoch.skipped_since(last_epoch);
-                if missed != 0 {
-                    controller_state
-                        .adc_missed_frames
-                        .fetch_add(missed, Ordering::Relaxed);
-                }
-                last_epoch = epoch;
-                faults.resolve_if_set(FaultType::AdcTimeout);
+        }
 
-                if v_ref == 0
-                    && !first_valid_frame
-                    && startup_started.elapsed() < Duration::from_millis(10)
-                {
-                    continue;
-                }
+        #[cfg(feature = "adc-timing")]
+        let observed_frame = Some((epoch, drivers::adc::timing::record_frame(epoch)));
 
+        if faults.any_active() {
+            self.strategy = ControlStrategy::Disabled;
+        }
+        if faults.any_active() && faults.load(FaultType::InvalidMeasurement) != FaultState::Active {
+            return Some(Decision {
+                requested: RequestedOutput::Inhibited(InhibitCause::Fault),
                 #[cfg(feature = "adc-timing")]
-                {
-                    observed_frame = Some((epoch, drivers::adc::timing::record_frame(epoch)));
-                }
+                observed_frame,
+            });
+        }
 
+        let raw = RawSnapshot {
+            i_u: frame.fast.current.u,
+            i_v: frame.fast.current.v,
+            i_w: frame.fast.current.w,
+            v_u: frame.fast.voltage.u,
+            v_v: frame.fast.voltage.v,
+            v_w: frame.fast.voltage.w,
+            v_ref,
+            max_duty: self.max_duty,
+            angle: state.raw_angle.load(Ordering::Relaxed),
+        };
+        let requested = match control_step(
+            &raw,
+            &mut self.strategy,
+            &self.current_zero,
+            self.vrefint_cal,
+            &self.sensor_scales,
+        ) {
+            ControlOutput::Safe => {
+                self.first_valid_frame = true;
+                faults.resolve_if_set(FaultType::InvalidMeasurement);
+                if !self.startup_failed
+                    && !self.ready_signaled
+                    && !faults.any_active()
+                    && !safety::dfu_shutdown_requested()
+                {
+                    self.ready_signaled = true;
+                    safety::acknowledge_fast_control_ready();
+                }
                 if faults.any_active() {
-                    strategy = ControlStrategy::Disabled;
-                }
-
-                if faults.any_active()
-                    && faults.load(FaultType::InvalidMeasurement) != FaultState::Active
-                {
                     RequestedOutput::Inhibited(InhibitCause::Fault)
                 } else {
-                    let raw_reading = RawSnapshot {
-                        i_u: frame.fast.current.u,
-                        i_v: frame.fast.current.v,
-                        i_w: frame.fast.current.w,
-
-                        v_u: frame.fast.voltage.u,
-                        v_v: frame.fast.voltage.v,
-                        v_w: frame.fast.voltage.w,
-
-                        v_ref,
-
-                        max_duty,
-                        angle: controller_state.raw_angle.load(Ordering::Relaxed),
-                    };
-                    match control_step(&raw_reading, &mut strategy) {
-                        ControlOutput::Safe => {
-                            first_valid_frame = true;
-                            faults.resolve_if_set(FaultType::InvalidMeasurement);
-                            if faults.any_active() {
-                                RequestedOutput::Inhibited(InhibitCause::Fault)
-                            } else {
-                                RequestedOutput::ArmedSafe
-                            }
-                        }
-                        ControlOutput::Drive(values) => {
-                            first_valid_frame = true;
-                            RequestedOutput::Drive(values)
-                        }
-                        ControlOutput::Fault(fault) => RequestedOutput::Fault(fault),
-                    }
+                    RequestedOutput::ArmedSafe
                 }
             }
+            ControlOutput::Drive(values) => {
+                self.first_valid_frame = true;
+                RequestedOutput::Drive(values)
+            }
+            ControlOutput::Fault(fault) => RequestedOutput::Fault(fault),
         };
+        Some(Decision {
+            requested,
+            #[cfg(feature = "adc-timing")]
+            observed_frame,
+        })
+    }
 
-        if safety::dfu_shutdown_requested()
-            && !matches!(requested_output, RequestedOutput::DfuInhibited { .. })
-        {
-            strategy = ControlStrategy::Disabled;
-            inverter.inhibit(InhibitCause::FirmwareUpdate);
-            continue;
-        }
-
-        if faults.any_active()
-            && matches!(
-                requested_output,
-                RequestedOutput::ArmedSafe | RequestedOutput::Drive(_)
-            )
-        {
-            strategy = ControlStrategy::Disabled;
-            inverter.inhibit(InhibitCause::Fault);
-            continue;
-        }
-        match requested_output {
-            RequestedOutput::ArmedSafe => inverter.enter_armed_safe(),
-            RequestedOutput::Inhibited(cause) => inverter.inhibit(cause),
+    fn apply(&mut self, decision: &Decision, faults: &FaultRegister) {
+        match decision.requested {
+            RequestedOutput::ArmedSafe => self.inverter.enter_armed_safe(),
+            RequestedOutput::Inhibited(cause) => self.inverter.inhibit(cause),
             RequestedOutput::DfuInhibited { request_id } => {
-                inverter.inhibit(InhibitCause::FirmwareUpdate);
+                self.inverter.inhibit(InhibitCause::FirmwareUpdate);
                 safety::acknowledge_dfu_output_inhibited(request_id);
             }
             RequestedOutput::Drive(values) => {
-                let result = inverter.drive(values);
+                let result = self.inverter.drive(values);
                 #[cfg(feature = "adc-timing")]
                 if result.is_ok() {
-                    drivers::adc::timing::record_duty_write(observed_frame.map(|(epoch, _)| epoch));
+                    drivers::adc::timing::record_duty_write(
+                        decision.observed_frame.map(|(epoch, _)| epoch),
+                    );
                 }
                 if result.is_err() {
                     faults.set(FaultType::InvalidControllerOutput);
-                    strategy = ControlStrategy::Disabled;
-                    inverter.inhibit(InhibitCause::Fault);
+                    self.strategy = ControlStrategy::Disabled;
+                    self.inverter.inhibit(InhibitCause::Fault);
                 }
             }
             RequestedOutput::Fault(fault) => {
@@ -302,13 +345,114 @@ pub async fn task_adc(adc: BoardAdcFast<'static>, pwm: UncheckedOutput) {
                     ControlFault::InvalidMeasurement => FaultType::InvalidMeasurement,
                     ControlFault::InvalidControllerOutput => FaultType::InvalidControllerOutput,
                 });
-                strategy = ControlStrategy::Disabled;
-                inverter.inhibit(InhibitCause::Fault);
+                self.strategy = ControlStrategy::Disabled;
+                self.inverter.inhibit(InhibitCause::Fault);
             }
         }
+    }
+}
+
+struct Decision {
+    requested: RequestedOutput,
+    #[cfg(feature = "adc-timing")]
+    observed_frame: Option<(TriggerEpoch, u32)>,
+}
+
+impl Decision {
+    fn command(requested: RequestedOutput) -> Self {
+        Self {
+            requested,
+            #[cfg(feature = "adc-timing")]
+            observed_frame: None,
+        }
+    }
+}
+
+#[embassy_executor::task]
+pub async fn task_adc(
+    adc: BoardAdcFast<'static>,
+    pwm: UncheckedOutput,
+    user_config: &'static UserConfig,
+    vrefint_cal: u16,
+    sensor_scales: BoardSensorScales,
+) {
+    let adc_1 = adc.adc1_running;
+    let adc_3 = adc.adc3_running;
+    let adc_5 = adc.adc5_running;
+    let inverter = SafeOutput::new(BoardOutput::new(pwm));
+    let mut control = FastControl::new(
+        inverter,
+        CurrentZeroOffsets {
+            u: user_config.current_zero_u,
+            v: user_config.current_zero_v,
+            w: user_config.current_zero_w,
+        },
+        vrefint_cal,
+        sensor_scales,
+    );
+    let controller_state = controller_shared::state::state();
+    let faults = FaultRegister::shared();
+
+    let mut freq_meter = FreqMeter::named("ADC");
+    freq_meter.link(&controller_state.foc_loop_frequency);
+
+    loop {
+        let start_time = Instant::now();
+        let decision = match next_fast_event(&adc_1, &adc_3, &adc_5, control.last_epoch).await {
+            FastEvent::Gate(request) => {
+                power_stage::handle_request(request, &mut control.inverter);
+                continue;
+            }
+            FastEvent::Command(ControlCommand::Stop) => {
+                control.strategy = ControlStrategy::Disabled;
+                Decision::command(RequestedOutput::ArmedSafe)
+            }
+            FastEvent::Command(ControlCommand::InhibitForDfu { request_id }) => {
+                control.strategy = ControlStrategy::Disabled;
+                Decision::command(RequestedOutput::DfuInhibited { request_id })
+            }
+            FastEvent::AdcTimeout if control.waiting_for_first_frame() => {
+                continue;
+            }
+            FastEvent::AdcTimeout => {
+                if !control.first_valid_frame && !control.startup_failed {
+                    control.startup_failed = true;
+                    error!("Fast control startup failed: ADC frame not ready");
+                }
+                faults.set(FaultType::AdcTimeout);
+                control.strategy = ControlStrategy::Disabled;
+                Decision::command(RequestedOutput::Inhibited(InhibitCause::Fault))
+            }
+            FastEvent::Frame(frame) => {
+                let Some(decision) = control.decide_frame(frame, controller_state, faults) else {
+                    continue;
+                };
+                decision
+            }
+        };
+
+        if safety::dfu_shutdown_requested()
+            && !matches!(decision.requested, RequestedOutput::DfuInhibited { .. })
+        {
+            control.strategy = ControlStrategy::Disabled;
+            control.inverter.inhibit(InhibitCause::FirmwareUpdate);
+            continue;
+        }
+
+        if faults.any_active()
+            && matches!(
+                decision.requested,
+                RequestedOutput::ArmedSafe | RequestedOutput::Drive(_)
+            )
+        {
+            control.strategy = ControlStrategy::Disabled;
+            control.inverter.inhibit(InhibitCause::Fault);
+            continue;
+        }
+        control.apply(&decision, faults);
 
         #[cfg(feature = "adc-timing")]
-        if let Some((epoch, frame_cycle)) = observed_frame {
+        if let Some((epoch, frame_cycle)) = decision.observed_frame {
             drivers::adc::timing::record_decision(epoch, frame_cycle);
         }
 
@@ -393,6 +537,7 @@ pub async fn task_adc_timing_report() {
     }
 }
 
+#[derive(Clone, Copy)]
 enum RequestedOutput {
     ArmedSafe,
     Inhibited(InhibitCause),

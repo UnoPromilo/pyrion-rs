@@ -894,6 +894,7 @@ dependencies = [
  "critical-section",
  "defmt 1.1.1",
  "drv8301-dd",
+ "embassy-futures",
  "embassy-stm32",
  "embassy-sync",
  "embassy-time",
@@ -1636,6 +1637,7 @@ dependencies = [
 name = "hardware"
 version = "0.1.0"
 dependencies = [
+ "controller-shared",
  "crc-engine",
  "defmt 1.1.1",
  "drivers",

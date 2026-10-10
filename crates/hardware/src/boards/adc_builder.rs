@@ -47,24 +47,24 @@ pub(crate) fn build_adc(
 
     let adc1_running = adc1_configured.start(
         [
-            (i_u.degrade_adc(), SampleTime::CYCLES6_5),
-            (v_u.degrade_adc(), SampleTime::CYCLES6_5),
+            (i_u.degrade_adc(), SampleTime::CYCLES12_5),
+            (v_u.degrade_adc(), SampleTime::CYCLES12_5),
         ],
         Irqs,
     );
 
     let adc3_running = adc3_configured.start(
         [
-            (i_v.degrade_adc(), SampleTime::CYCLES6_5),
-            (v_v.degrade_adc(), SampleTime::CYCLES6_5),
+            (i_v.degrade_adc(), SampleTime::CYCLES12_5),
+            (v_v.degrade_adc(), SampleTime::CYCLES12_5),
         ],
         Irqs,
     );
 
     let adc5_running = adc5_configured.start(
         [
-            (i_w.degrade_adc(), SampleTime::CYCLES6_5),
-            (v_w.degrade_adc(), SampleTime::CYCLES6_5),
+            (i_w.degrade_adc(), SampleTime::CYCLES12_5),
+            (v_w.degrade_adc(), SampleTime::CYCLES12_5),
         ],
         Irqs,
     );

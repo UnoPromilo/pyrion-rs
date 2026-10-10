@@ -1,7 +1,7 @@
 use crate::irqs::Irqs;
 use crate::limits::{BoardId, BoardLimits};
 use crate::serial_number::get_serial_number_as_hex;
-use crate::{Board, BoardLeds, SenseFilter};
+use crate::{Board, BoardLeds, BoardSensorScales, SenseFilter};
 use core::cell::RefCell;
 use crc_engine::hardware::HardwareCrcEngine;
 use drivers::{ConfigurationError, Drv8301Configuration, Drv8301Stage, SixPwmTim1};
@@ -10,7 +10,8 @@ use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::{can, i2c, spi, usart, usb};
 use embassy_sync::blocking_mutex::Mutex;
-use units::{ElectricCurrent, ElectricPotential, F32UnitType};
+use units::si::electrical_resistance::milliohm;
+use units::{ElectricCurrent, ElectricPotential, ElectricalResistance, F32UnitType};
 use user_config::UserConfig;
 
 pub const BOARD_ID: BoardId = BoardId::PyrionOvo;
@@ -25,6 +26,14 @@ pub fn limits() -> BoardLimits {
     BoardLimits {
         max_bus_voltage: ElectricPotential::from_f32(30.0),
         max_phase_current: ElectricCurrent::from_f32(60.0),
+    }
+}
+
+pub fn sensor_scales() -> BoardSensorScales {
+    BoardSensorScales {
+        shunt_resistance: ElectricalResistance::new::<milliohm>(0.5),
+        current_gain: 20.0,
+        v_bus_scale_ratio: 10.0 / 0.510, // bench-measured values: 10V at the bus gives 0.510 V at the ADC pin
     }
 }
 

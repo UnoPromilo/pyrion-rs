@@ -123,6 +123,8 @@ fn main() -> ! {
     let flash_bank2 = FLASH_BANK2.init(board.flash_bank2);
 
     let usb_config = get_usb_config(serial_number);
+    let vrefint_cal = board.adc.slow_vref.calibrated_value();
+    let sensor_scales = hardware::sensor_scales();
     let (mut fast_output, slow_control) = board.power_stage.split();
 
     interrupt::TIM1_CC.set_priority(Priority::P0);
@@ -134,7 +136,16 @@ fn main() -> ! {
 
     interrupt::UART4.set_priority(Priority::P6);
     let high_priority_spawner = EXECUTOR_HIGH.start(interrupt::UART4);
-    high_priority_spawner.spawn(app::task_adc(board.adc.fast, fast_output).unwrap());
+    high_priority_spawner.spawn(
+        app::task_adc(
+            board.adc.fast,
+            fast_output,
+            user_config,
+            vrefint_cal,
+            sensor_scales,
+        )
+        .unwrap(),
+    );
 
     interrupt::UART5.set_priority(Priority::P7);
 
@@ -148,7 +159,8 @@ fn main() -> ! {
     let low_priority_executor = EXECUTOR_LOW.init(Executor::new());
     low_priority_executor.run(|low_priority_spawner| {
         low_priority_spawner.spawn(app::task_slow_vref(board.adc.slow_vref).unwrap());
-        low_priority_spawner.spawn(app::task_slow_aux(board.adc.slow_aux).unwrap());
+        low_priority_spawner
+            .spawn(app::task_slow_aux(board.adc.slow_aux, vrefint_cal, sensor_scales).unwrap());
         #[cfg(feature = "adc-timing")]
         low_priority_spawner.spawn(app::task_adc_timing_report().unwrap());
         low_priority_spawner.spawn(app::task_gate_driver(slow_control).unwrap());

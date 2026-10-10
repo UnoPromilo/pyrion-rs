@@ -1,5 +1,7 @@
-use crate::converters::{ConfigValues, convert_to_current, convert_to_voltage};
-use crate::io::{ControlFault, ControlOutput, RawInverterValues, RawSnapshot};
+use crate::converters::{
+    BoardSensorScales, convert_to_current, convert_to_voltage, current_per_adc_count,
+};
+use crate::io::{ControlFault, ControlOutput, CurrentZeroOffsets, RawInverterValues, RawSnapshot};
 use crate::strategy::ControlStrategy;
 use core::num::NonZeroU16;
 use core::sync::atomic::Ordering;
@@ -7,24 +9,29 @@ use foc::snapshot::{AngleSnapshot, FocInput};
 use units::si::angle::radian;
 use units::{Angle, ElectricCurrent, IntoRawDutyCycle};
 
-pub fn store_bus_voltage(sample: u16, vref: NonZeroU16) {
+pub fn store_bus_voltage(
+    sample: u16,
+    vref: NonZeroU16,
+    vref_cal: NonZeroU16,
+    scales: &BoardSensorScales,
+) {
     let v_bus =
-        convert_to_voltage(sample as i32, vref.get()) * ConfigValues::default().v_bus_scale_ratio;
+        convert_to_voltage(sample as i32, vref.get(), vref_cal.get()) * scales.v_bus_scale_ratio;
     crate::state::state().v_bus.store(v_bus, Ordering::Relaxed);
 }
 
 pub fn control_step(
     raw_snapshot: &RawSnapshot,
     control_strategy: &mut ControlStrategy,
+    current_zero: &CurrentZeroOffsets,
+    vrefint_cal: u16,
+    scales: &BoardSensorScales,
 ) -> ControlOutput {
-    if raw_snapshot.v_ref == 0 {
+    if raw_snapshot.v_ref == 0 || !(1..=4095).contains(&vrefint_cal) {
         return ControlOutput::Fault(ControlFault::InvalidMeasurement);
     }
 
-    let default_config: ConfigValues = ConfigValues::default();
-    let u = convert_to_current(raw_snapshot.i_u, raw_snapshot.v_ref, &default_config);
-    let v = convert_to_current(raw_snapshot.i_v, raw_snapshot.v_ref, &default_config);
-    let w = convert_to_current(raw_snapshot.i_w, raw_snapshot.v_ref, &default_config);
+    let [u, v, w] = phase_currents(raw_snapshot, current_zero, vrefint_cal, scales);
     store_in_state(u, v, w);
 
     if !u.value.is_finite() || !v.value.is_finite() || !w.value.is_finite() {
@@ -62,6 +69,20 @@ pub fn control_step(
     }
 }
 
+fn phase_currents(
+    raw: &RawSnapshot,
+    zero: &CurrentZeroOffsets,
+    vrefint_cal: u16,
+    scales: &BoardSensorScales,
+) -> [ElectricCurrent; 3] {
+    let per_count = current_per_adc_count(raw.v_ref, vrefint_cal, scales);
+    [
+        convert_to_current(raw.i_u, zero.u, per_count),
+        convert_to_current(raw.i_v, zero.v, per_count),
+        convert_to_current(raw.i_w, zero.w, per_count),
+    ]
+}
+
 pub fn store_in_state(i_u: ElectricCurrent, i_v: ElectricCurrent, i_w: ElectricCurrent) {
     let state = crate::state::state();
 
@@ -74,8 +95,10 @@ pub fn store_in_state(i_u: ElectricCurrent, i_v: ElectricCurrent, i_w: ElectricC
 mod tests {
     use super::*;
     use foc::state::FocState;
+    use units::si::electrical_resistance::milliohm;
     use units::si::ratio::ratio;
-    use units::{F32UnitType, Ratio};
+    use units::{ElectricalResistance, F32UnitType, Ratio};
+    const VREFINT_CAL: u16 = 1652;
 
     fn valid_snapshot() -> RawSnapshot {
         RawSnapshot {
@@ -91,12 +114,86 @@ mod tests {
         }
     }
 
+    fn zero_offsets() -> CurrentZeroOffsets {
+        CurrentZeroOffsets {
+            u: 2048,
+            v: 2048,
+            w: 2048,
+        }
+    }
+
+    fn test_scales() -> BoardSensorScales {
+        BoardSensorScales {
+            shunt_resistance: ElectricalResistance::new::<milliohm>(0.5),
+            current_gain: 20.0,
+            v_bus_scale_ratio: 2.0,
+        }
+    }
+
+    #[test]
+    fn each_phase_uses_its_own_zero_count() {
+        let mut raw = valid_snapshot();
+        raw.i_u = 2073;
+        raw.i_v = 2060;
+        raw.i_w = 2030;
+        let zero = CurrentZeroOffsets {
+            u: 2073,
+            v: 2060,
+            w: 2030,
+        };
+        let config = test_scales();
+
+        let [u, v, w] = phase_currents(&raw, &zero, VREFINT_CAL, &config);
+        assert_eq!([u.value, v.value, w.value], [0.0; 3]);
+
+        raw.i_v += 1;
+        let [u, v, w] = phase_currents(&raw, &zero, VREFINT_CAL, &config);
+        assert_eq!(u.value, 0.0);
+        assert!(v.value > 0.0);
+        assert_eq!(w.value, 0.0);
+    }
+
+    #[test]
+    fn phase_currents_use_configured_gain() {
+        let mut raw = valid_snapshot();
+        raw.i_u += 1;
+        let config = test_scales();
+        let initial = phase_currents(&raw, &zero_offsets(), VREFINT_CAL, &config)[0];
+        let doubled_gain = BoardSensorScales {
+            current_gain: config.current_gain * 2.0,
+            ..config
+        };
+        let reduced = phase_currents(&raw, &zero_offsets(), VREFINT_CAL, &doubled_gain)[0];
+
+        assert!((initial.value - reduced.value * 2.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn one_reference_scale_applies_to_signed_phase_deltas() {
+        let mut raw = valid_snapshot();
+        raw.i_u = 2050;
+        raw.i_v = 2046;
+        raw.i_w = 2049;
+
+        let [u, v, w] = phase_currents(&raw, &zero_offsets(), VREFINT_CAL, &test_scales());
+
+        assert!(u.value > 0.0);
+        assert!((u.value + v.value).abs() < 0.000001);
+        assert!((u.value - 2.0 * w.value).abs() < 0.000001);
+    }
+
     #[test]
     fn disabled_strategy_requests_safe_output() {
         let mut strategy = ControlStrategy::Disabled;
 
         assert_eq!(
-            control_step(&valid_snapshot(), &mut strategy),
+            control_step(
+                &valid_snapshot(),
+                &mut strategy,
+                &zero_offsets(),
+                VREFINT_CAL,
+                &test_scales(),
+            ),
             ControlOutput::Safe
         );
     }
@@ -108,7 +205,13 @@ mod tests {
         let mut strategy = ControlStrategy::Disabled;
 
         assert_eq!(
-            control_step(&snapshot, &mut strategy),
+            control_step(
+                &snapshot,
+                &mut strategy,
+                &zero_offsets(),
+                VREFINT_CAL,
+                &test_scales()
+            ),
             ControlOutput::Fault(ControlFault::InvalidMeasurement)
         );
     }
@@ -127,14 +230,25 @@ mod tests {
         let mut strategy = ControlStrategy::Foc(state);
 
         assert_eq!(
-            control_step(&valid_snapshot(), &mut strategy),
+            control_step(
+                &valid_snapshot(),
+                &mut strategy,
+                &zero_offsets(),
+                VREFINT_CAL,
+                &test_scales(),
+            ),
             ControlOutput::Fault(ControlFault::InvalidControllerOutput)
         );
     }
 
     #[test]
     fn motor_control_does_not_use_bus_voltage_telemetry() {
-        store_bus_voltage(0, NonZeroU16::new(1550).unwrap());
+        store_bus_voltage(
+            0,
+            NonZeroU16::new(1550).unwrap(),
+            NonZeroU16::new(VREFINT_CAL).unwrap(),
+            &test_scales(),
+        );
         let state = FocState::new(
             Ratio::new::<ratio>(0.0),
             Ratio::new::<ratio>(0.0),
@@ -145,7 +259,13 @@ mod tests {
         );
         let mut strategy = ControlStrategy::Foc(state);
 
-        let at_zero_bus = control_step(&valid_snapshot(), &mut strategy);
+        let at_zero_bus = control_step(
+            &valid_snapshot(),
+            &mut strategy,
+            &zero_offsets(),
+            VREFINT_CAL,
+            &test_scales(),
+        );
         assert_eq!(
             at_zero_bus,
             ControlOutput::Drive(RawInverterValues {
@@ -155,8 +275,34 @@ mod tests {
             })
         );
 
-        store_bus_voltage(1000, NonZeroU16::new(1550).unwrap());
-        assert!(crate::state::state().v_bus.load(Ordering::Relaxed).value > 0.0);
-        assert_eq!(control_step(&valid_snapshot(), &mut strategy), at_zero_bus);
+        store_bus_voltage(
+            1000,
+            NonZeroU16::new(1550).unwrap(),
+            NonZeroU16::new(VREFINT_CAL).unwrap(),
+            &test_scales(),
+        );
+        let initial = crate::state::state().v_bus.load(Ordering::Relaxed).value;
+        assert!((initial - 1.5616).abs() < 0.001);
+        store_bus_voltage(
+            1000,
+            NonZeroU16::new(1550).unwrap(),
+            NonZeroU16::new(VREFINT_CAL).unwrap(),
+            &BoardSensorScales {
+                v_bus_scale_ratio: 4.0,
+                ..test_scales()
+            },
+        );
+        let scaled = crate::state::state().v_bus.load(Ordering::Relaxed).value;
+        assert!((scaled - 2.0 * initial).abs() < 0.0001);
+        assert_eq!(
+            control_step(
+                &valid_snapshot(),
+                &mut strategy,
+                &zero_offsets(),
+                VREFINT_CAL,
+                &test_scales(),
+            ),
+            at_zero_bus
+        );
     }
 }

@@ -17,7 +17,11 @@ pub use board::*;
 #[cfg(feature = "board-pyrion-ovo")]
 pub use boards::validate_drv8301_configuration;
 #[cfg(feature = "board")]
-pub use boards::{AuxiliaryAdcCounts, BOARD_ID, BoardAdcFrame, FastAdcCounts, Phase, limits};
+pub use boards::{
+    AuxiliaryAdcCounts, BOARD_ID, BoardAdcFrame, FastAdcCounts, Phase, limits, sensor_scales,
+};
+#[cfg(feature = "board")]
+pub use controller_shared::BoardSensorScales;
 #[cfg(any(feature = "cap-voltage-filter", feature = "cap-current-filter"))]
 pub use filter::SenseFilter;
 #[cfg(feature = "board")]

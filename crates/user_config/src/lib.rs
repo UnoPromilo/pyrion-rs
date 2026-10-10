@@ -10,6 +10,9 @@ pub struct UserConfig {
     pub can_bitrate: u32,
     pub fd_can_bitrate: u32,
     pub shaft_position_detector: ShaftPositionDetector,
+    pub current_zero_u: u16,
+    pub current_zero_v: u16,
+    pub current_zero_w: u16,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -31,6 +34,9 @@ impl Default for UserConfig {
             can_bitrate: 250_000,
             fd_can_bitrate: 250_000,
             shaft_position_detector: ShaftPositionDetector::OpenLoop,
+            current_zero_u: 2043,
+            current_zero_v: 2043,
+            current_zero_w: 2042,
         }
     }
 }

@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = []
 mcu-core = []
-board = ["dep:units", "dep:drivers", "drivers/adc",  "dep:crc-engine", "dep:user-config"]
+board = ["dep:units", "dep:drivers", "drivers/adc",  "dep:crc-engine", "dep:user-config", "dep:controller-shared"]
 board-pyrion-ovo = [
     "board",
     "cap-external-i2c",
@@ -57,3 +57,4 @@ drivers = { path = "../drivers", optional = true }
 crc-engine = { path = "../utils/crc_engine", features = ["hardware"], optional = true }
 units = { path = "../utils/units", optional = true }
 user-config = { path = "../user_config", optional = true }
+controller-shared = { path = "../controllers/controller_shared", optional = true }
