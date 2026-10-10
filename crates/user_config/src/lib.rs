@@ -34,9 +34,9 @@ impl Default for UserConfig {
             can_bitrate: 250_000,
             fd_can_bitrate: 250_000,
             shaft_position_detector: ShaftPositionDetector::OpenLoop,
-            current_zero_u: 2043,
-            current_zero_v: 2043,
-            current_zero_w: 2042,
+            current_zero_u: 2035,
+            current_zero_v: 2031,
+            current_zero_w: 2032,
         }
     }
 }
